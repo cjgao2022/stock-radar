@@ -103,13 +103,19 @@ stock-radar/
 
 ---
 
-### 5. AKShare 乐咕乐股 — 市场情绪
+### 5. 新浪全量行情 — 市场情绪（涨跌家数）
 
-**文件**：`fetchers/market.py`
+**文件**：`fetchers/market.py` → `fetch_market_breadth()`
+**数据源**：AKShare `stock_zh_a_spot()`，底层为新浪 A 股全量接口，与 `hq.sinajs.cn` 同源
+**注意**：拉取全量 ~5500 支股票耗时约 20 秒，路由缓存 TTL 设为 300 秒（5 分钟）
 
-| AKShare 函数 | 用途 | 页面 |
-|-------------|------|------|
-| `stock_market_activity_legu()` | 全市场上涨/下跌/平盘家数、涨停/跌停数量、活跃度 | 首页市场情绪条 |
+| 字段 | 说明 |
+|------|------|
+| `up` / `down` / `flat` | 涨/跌/平盘家数（全 A 股含北交所） |
+| `zt` / `dt` | 涨停/跌停家数（按涨跌幅 ±9.9% 阈值近似，精确值见 /api/zt 涨停板池） |
+| `total` | 全量股票数 |
+
+> 历史原因：曾用 `stock_market_activity_legu()`（乐咕乐股），数据偏少（不含北交所等）已废弃替换。
 
 ---
 

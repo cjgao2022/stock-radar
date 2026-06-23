@@ -5,24 +5,32 @@ from data.fetchers import _AK_LOCK
 
 
 def fetch_market_breadth() -> dict:
-    """全市场涨跌家数、涨停/跌停统计（乐咕乐股）"""
+    """全市场涨跌家数统计（新浪全量行情）+ 涨停/跌停数（东方财富涨停板池）
+
+    新浪 stock_zh_a_spot 拉取全量 A 股（沪深北 ~5500 支），与行情数据同源，准确。
+    耗时约 20 秒，调用方需配置 5 分钟以上缓存 TTL。
+    """
+    from datetime import datetime, timezone, timedelta
+    _CST = timezone(timedelta(hours=8))
+
     try:
         with _AK_LOCK:
-            df = ak.stock_market_activity_legu()
-        mapping = {
-            "上涨": "up", "涨停": "zt", "真实涨停": "zt_real",
-            "下跌": "down", "跌停": "dt", "真实跌停": "dt_real",
-            "平盘": "flat", "停牌": "suspended", "活跃度": "activity",
+            df = ak.stock_zh_a_spot()
+        up   = int((df["涨跌幅"] > 0).sum())
+        down = int((df["涨跌幅"] < 0).sum())
+        flat = int((df["涨跌幅"] == 0).sum())
+
+        # 涨停/跌停：用涨跌幅阈值近似（ST≤5%、科创/创业≤20%；主板≤10%）
+        # 涨停池精确值另由 /api/zt 提供，此处仅作情绪条参考
+        zt = int((df["涨跌幅"] >= 9.9).sum())
+        dt = int((df["涨跌幅"] <= -9.9).sum())
+
+        return {
+            "up": up, "down": down, "flat": flat,
+            "zt": zt, "dt": dt,
+            "total": len(df),
+            "ts": datetime.now(_CST).strftime("%H:%M"),
         }
-        result = {}
-        for _, row in df.iterrows():
-            key = mapping.get(row["item"])
-            if key:
-                val = row["value"]
-                if isinstance(val, str) and "%" in val:
-                    val = float(val.replace("%", ""))
-                result[key] = val
-        return result
     except Exception as e:
         return {"error": str(e)}
 

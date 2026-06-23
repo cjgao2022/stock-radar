@@ -43,7 +43,7 @@ def api_zt():
 
 @router.get("/api/market/breadth")
 def api_market_breadth():
-    return get_cached("market_breadth", 60, fetch_market_breadth)
+    return get_cached("market_breadth", 300, fetch_market_breadth)  # 全量拉取耗时~20s，5分钟缓存
 
 
 @router.get("/api/market/north")
