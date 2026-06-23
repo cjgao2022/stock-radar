@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% block title %}{{ board_name }} - 股票雷达{% endblock %}
+
+{% block head %}
+<style>
+  .kline-loading { display:flex;align-items:center;justify-content:center;height:340px;color:var(--text3);font-size:.9rem; }
+  .stat-row { display:flex;gap:0;background:var(--dark2);border-radius:10px;border:1px solid var(--border2);overflow:hidden;margin-bottom:14px; }
+  .stat-row .sr-item { flex:1;padding:12px 16px;border-right:1px solid var(--border2); }
+  .stat-row .sr-item:last-child { border-right:none; }
+  .stat-row .sr-label { font-size:.7rem;color:var(--text3);letter-spacing:.4px;margin-bottom:3px; }
+  .stat-row .sr-val   { font-size:1.1rem;font-weight:800;font-variant-numeric:tabular-nums; }
+
+  [data-theme="light"] .stat-row { background:#f7f9fc; border-color:var(--border); }
+  [data-theme="light"] .stat-row .sr-item { border-right-color:var(--border); }
+  [data-theme="light"] .stat-row .sr-label { color:var(--text3); }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- 面包屑 -->
+<div class="d-flex align-items-center gap-2 mb-3">
+  <a href="/boards" class="text-decoration-none" style="font-size:.83rem;color:var(--text3)">← 板块列表</a>
+  <span style="color:var(--border2)">／</span>
+  <span style="font-size:.83rem;color:var(--text2)">{{ board_name }}</span>
+  <span class="chg-badge flat" style="font-size:.72rem">{{ board_type_label }}</span>
+</div>
+
+<div class="row g-3">
+  <!-- K 线图 -->
+  <div class="col-lg-7">
+    <div class="panel h-100 d-flex flex-column">
+      <div class="panel-hd flex-shrink-0">
+        <div class="hd-title"><div class="accent-bar"></div>{{ board_name }} 近30日走势</div>
+        <span id="kline-chg" style="font-size:.82rem"></span>
+      </div>
+      <div style="flex:1;min-height:0;padding:8px 4px 4px">
+        <div id="kline-chart" style="width:100%;height:340px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 右侧：统计 + 构成股 -->
+  <div class="col-lg-5 d-flex flex-column gap-3">
+    <!-- 板块统计 -->
+    <div class="panel">
+      <div class="panel-hd"><div class="hd-title"><div class="accent-bar"></div>板块摘要</div></div>
+      <div class="panel-body">
+        <div class="stat-row" id="stat-row">
+          <div class="sr-item"><div class="sr-label">今日涨跌</div><div class="sr-val" id="sr-chg">--</div></div>
+          <div class="sr-item"><div class="sr-label">净流入</div><div class="sr-val" id="sr-net">--</div></div>
+          <div class="sr-item"><div class="sr-label">公司家数</div><div class="sr-val" id="sr-cnt">--</div></div>
+        </div>
+        <div>
+          <div style="font-size:.72rem;color:var(--text3);margin-bottom:4px">领涨股</div>
+          <div id="top-stock" style="font-size:.95rem;font-weight:700">--</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 构成股 -->
+    <div class="panel flex-grow-1">
+      <div class="panel-hd">
+        <div class="hd-title"><div class="accent-bar"></div>构成股</div>
+        <span id="cons-count" style="font-size:.72rem;color:var(--text3)"></span>
+      </div>
+      <div style="max-height:280px;overflow-y:auto">
+        <table class="data-table">
+          <thead style="position:sticky;top:0;z-index:1">
+            <tr>
+              <th>代码</th><th>名称</th>
+              <th class="text-end">最新价</th>
+              <th class="text-end">涨跌幅</th>
+            </tr>
+          </thead>
+          <tbody id="cons-tbody">
+            <tr><td colspan="4" class="text-center text-muted py-3">加载中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const boardType = '{{ board_type }}';
+const boardName = '{{ board_name }}';
+
+function fmtPct(v){ if(v==null)return'-'; return(v>0?'+':'')+Number(v).toFixed(2)+'%'; }
+function fmtNet(v){ if(v==null)return'-'; return(v>=0?'+':'')+Number(v).toFixed(2)+'亿'; }
+function pctClass(v){ return v>0?'up':v<0?'down':'flat'; }
+
+/* ── K 线图 ── */
+const klineChart = echarts.init(document.getElementById('kline-chart'));
+
+fetch(`/api/boards/${boardType}/${encodeURIComponent(boardName)}/kline`)
+  .then(r=>r.json()).then(data=>{
+    const rows = data.filter(d=>!d.error);
+    if(!rows.length){
+      document.getElementById('kline-chart').innerHTML =
+        '<div class="kline-loading">K 线数据暂不可用</div>';
+      return;
+    }
+
+    const dates  = rows.map(d=>d.date);
+    const closes = rows.map(d=>d.close);
+    const first  = closes[0], last = closes[closes.length-1];
+    const chgPct = ((last-first)/first*100).toFixed(2);
+    const cls    = chgPct>0?'up':chgPct<0?'down':'flat';
+    document.getElementById('kline-chg').innerHTML =
+      `30日 <span class="${cls} num fw-bold">${chgPct>0?'+':''}${chgPct}%</span>`;
+
+    klineChart.setOption({
+      backgroundColor:'transparent',
+      tooltip:{
+        trigger:'axis',
+        backgroundColor:'rgba(13,21,38,.92)',
+        borderColor:'rgba(255,255,255,.1)',
+        textStyle:{color:'#e0e8f8',fontSize:12},
+        formatter:params=>{
+          const p=params[0];
+          return `${p.axisValueLabel}<br>收盘 <b class="num">${Number(p.value).toFixed(2)}</b>`;
+        }
+      },
+      grid:{left:60,right:16,top:12,bottom:36},
+      xAxis:{
+        type:'category', data:dates, boundaryGap:false,
+        axisLabel:{color:'#5a6a8a',fontSize:11,
+          formatter:v=>v.slice(5)},
+        axisLine:{lineStyle:{color:'#2a3550'}},
+        splitLine:{show:false}
+      },
+      yAxis:{
+        type:'value', scale:true,
+        axisLabel:{color:'#5a6a8a',fontSize:11,formatter:v=>v.toFixed(0)},
+        axisLine:{show:false},
+        splitLine:{lineStyle:{color:'#1e2c48',type:'dashed'}}
+      },
+      series:[{
+        type:'line', data:closes,
+        smooth:0.3,
+        lineStyle:{width:2,color: chgPct>=0?'#e8374a':'#18a361'},
+        symbol:'none',
+        areaStyle:{
+          color:{
+            type:'linear',x:0,y:0,x2:0,y2:1,
+            colorStops: chgPct>=0
+              ?[{offset:0,color:'rgba(232,55,74,.25)'},{offset:1,color:'rgba(232,55,74,.02)'}]
+              :[{offset:0,color:'rgba(24,163,97,.25)'},{offset:1,color:'rgba(24,163,97,.02)'}]
+          }
+        }
+      }]
+    });
+  });
+
+window.addEventListener('resize',()=>klineChart.resize());
+setTimeout(()=>klineChart.resize(),100);
+
+/* ── 板块摘要：从列表缓存拿 ── */
+fetch(`/api/boards?board_type=${boardType}&sort=change_pct&order=desc`)
+  .then(r=>r.json()).then(data=>{
+    const item = data.find(d=>d.name===boardName);
+    if(!item) return;
+    const cc  = pctClass(item.change_pct);
+    const nc  = item.net!=null ? pctClass(item.net) : 'flat';
+    document.getElementById('sr-chg').innerHTML = `<span class="${cc} num">${fmtPct(item.change_pct)}</span>`;
+    document.getElementById('sr-net').innerHTML = `<span class="${nc} num">${fmtNet(item.net)}</span>`;
+    document.getElementById('sr-cnt').textContent = item.company_count!=null ? `${item.company_count} 家` : '--';
+    if(item.top_stock){
+      const tc = item.top_stock_chg!=null ? pctClass(item.top_stock_chg) : 'flat';
+      document.getElementById('top-stock').innerHTML =
+        `<span class="fw-bold">${item.top_stock}</span>
+         <span class="${tc} num ms-2" style="font-size:.85rem">${fmtPct(item.top_stock_chg)}</span>`;
+    }
+  });
+
+/* ── 构成股 ── */
+fetch(`/api/boards/${boardType}/${encodeURIComponent(boardName)}/constituents`)
+  .then(r=>r.json()).then(data=>{
+    const tbody = document.getElementById('cons-tbody');
+    if(!data.length||data[0]?.error){
+      const isNetErr = data[0]?.error?.includes('Connection')||data[0]?.error?.includes('aborted')||data[0]?.error?.includes('Remote');
+      const msg = isNetErr
+        ? '构成股数据来自东方财富，当前网络无法连接（可切换网络后刷新）'
+        : (data[0]?.error||'暂无数据');
+      tbody.innerHTML=`<tr><td colspan="4" class="text-center py-3" style="font-size:.82rem;color:var(--text3)">${msg}</td></tr>`;
+      return;
+    }
+    document.getElementById('cons-count').textContent = `共 ${data.length} 只`;
+    const sorted = [...data].sort((a,b)=>(b.change_pct||0)-(a.change_pct||0));
+    tbody.innerHTML = sorted.map(d=>{
+      const cls = pctClass(d.change_pct);
+      return `<tr>
+        <td class="num text-muted" style="font-size:.76rem">${d.stock_code||'-'}</td>
+        <td class="fw-semibold" style="font-size:.84rem">${d.stock_name||'-'}</td>
+        <td class="text-end num ${cls}">${d.price!=null?Number(d.price).toFixed(2):'-'}</td>
+        <td class="text-end"><span class="chg-badge ${cls}">${fmtPct(d.change_pct)}</span></td>
+      </tr>`;
+    }).join('');
+  }).catch(()=>{
+    document.getElementById('cons-tbody').innerHTML =
+      '<tr><td colspan="4" class="text-center py-3" style="color:var(--text3)">数据加载失败</td></tr>';
+  });
+</script>
+{% endblock %}

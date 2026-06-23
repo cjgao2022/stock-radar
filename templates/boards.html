@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+{% block title %}板块行情 - 股票雷达{% endblock %}
+
+{% block head %}
+<style>
+  /* Tab 切换 */
+  .tab-seg { display:flex; gap:0; background:#eef0f6; border-radius:8px; padding:3px; }
+  .tab-seg button {
+    flex:1; border:none; background:transparent; border-radius:6px;
+    padding:6px 20px; font-size:.84rem; font-weight:600; color:var(--text3);
+    cursor:pointer; transition:all .18s; white-space:nowrap;
+  }
+  .tab-seg button.active { background:#fff; color:var(--accent); box-shadow:0 1px 4px rgba(0,0,0,.1); }
+
+  /* 板块行高亮 */
+  #board-tbody tr { cursor:pointer; transition:background .12s; }
+  #board-tbody tr:hover td { background:#eef3ff; }
+  #board-tbody tr:hover td:first-child { border-left:3px solid var(--accent); }
+  #board-tbody td:first-child { border-left:3px solid transparent; transition:border .12s; }
+
+  /* 涨跌幅大数字 */
+  .pct-big { font-size:1rem; font-weight:800; font-variant-numeric:tabular-nums; }
+
+  /* 净流入条 */
+  .net-bar-wrap { width:70px; height:4px; background:var(--border); border-radius:2px; position:relative; }
+  .net-bar-fill { height:4px; border-radius:2px; position:absolute; }
+  .net-bar-fill.up   { background:var(--up);   right:50%; }
+  .net-bar-fill.down { background:var(--down); left:50%;  }
+
+  /* 概览统计行 */
+  .overview-bar {
+    display:flex; gap:0;
+    background:#fff; border-radius:10px;
+    border:1px solid var(--border);
+    box-shadow:var(--shadow-sm);
+    overflow:hidden;
+    margin-bottom:12px;
+  }
+  .ov-item { flex:1; padding:12px 16px; border-right:1px solid var(--border); }
+  .ov-item:last-child { border-right:none; }
+  .ov-item .ov-label { font-size:.7rem; color:var(--text3); letter-spacing:.4px; margin-bottom:3px; }
+  .ov-item .ov-val   { font-size:1.25rem; font-weight:800; font-variant-numeric:tabular-nums; }
+  .ov-item .ov-sub   { font-size:.72rem; color:var(--text3); margin-top:2px; }
+
+  /* 深色主题覆盖 */
+  [data-theme="dark"] .overview-bar { background:var(--card-bg); border-color:var(--border); }
+  [data-theme="dark"] .ov-item { border-right-color:var(--border); }
+  [data-theme="dark"] .ov-item .ov-label { color:rgba(255,255,255,.35); }
+  [data-theme="dark"] .ov-item .ov-sub   { color:rgba(255,255,255,.35); }
+  [data-theme="dark"] .tab-seg { background:rgba(255,255,255,.06); }
+  [data-theme="dark"] .tab-seg button { color:rgba(255,255,255,.4); }
+  [data-theme="dark"] .tab-seg button.active { background:rgba(61,126,252,.22); color:var(--accent2); box-shadow:none; }
+  [data-theme="dark"] #board-tbody tr:hover td { background:rgba(255,255,255,.05); }
+  [data-theme="dark"] #board-tbody tr:hover td:first-child { border-left-color:var(--accent); }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- 概览统计 -->
+<div class="overview-bar" id="overview-bar">
+  <div class="ov-item">
+    <div class="ov-label">板块总数</div>
+    <div class="ov-val" id="ov-total">--</div>
+    <div class="ov-sub" id="ov-tab-name">概念板块</div>
+  </div>
+  <div class="ov-item">
+    <div class="ov-label">上涨板块</div>
+    <div class="ov-val up" id="ov-up">--</div>
+    <div class="ov-sub" id="ov-up-avg">均涨 --</div>
+  </div>
+  <div class="ov-item">
+    <div class="ov-label">下跌板块</div>
+    <div class="ov-val down" id="ov-down">--</div>
+    <div class="ov-sub" id="ov-down-avg">均跌 --</div>
+  </div>
+  <div class="ov-item">
+    <div class="ov-label">最强涨幅</div>
+    <div class="ov-val up" id="ov-top-pct">--</div>
+    <div class="ov-sub" id="ov-top-name">--</div>
+  </div>
+  <div class="ov-item">
+    <div class="ov-label">最大净流入</div>
+    <div class="ov-val up" id="ov-top-net">--</div>
+    <div class="ov-sub" id="ov-top-net-name">--</div>
+  </div>
+</div>
+
+<!-- 筛选栏 -->
+<div class="d-flex justify-content-between align-items-center mb-2 px-1">
+  <div class="tab-seg">
+    <button class="active" id="tab-concept" onclick="switchTab('concept',this)">概念板块</button>
+    <button id="tab-industry" onclick="switchTab('industry',this)">行业板块</button>
+  </div>
+  <div class="d-flex gap-2 align-items-center">
+    <div class="search-wrap">
+      <span class="si">🔍</span>
+      <input type="text" class="form-control form-control-sm" placeholder="搜索板块..."
+             id="search-input" style="width:160px" oninput="filterTable()">
+    </div>
+    <span id="update-time" style="font-size:.72rem;color:var(--text3)"></span>
+  </div>
+</div>
+
+<!-- 板块表格 -->
+<div class="panel">
+  <div class="panel-body-flush">
+    <div class="table-responsive">
+      <table class="data-table" id="board-table">
+        <thead>
+          <tr>
+            <th style="width:40px">#</th>
+            <th>板块名称</th>
+            <th class="text-end sortable" onclick="sortBy('change_pct')" id="th-chg">涨跌幅 <span class="sort-icon">↓</span></th>
+            <th class="text-center" style="min-width:130px">涨↑ / 跌↓</th>
+            <th class="text-end sortable" onclick="sortBy('net')" id="th-net">净流入 <span class="sort-icon">↕</span></th>
+            <th style="min-width:120px">领涨股</th>
+          </tr>
+        </thead>
+        <tbody id="board-tbody">
+          <tr><td colspan="6" class="text-center text-muted py-5">加载中，板块数据约需 15 秒...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let allRows = [];
+let currentSort = { key:'change_pct', desc:true };
+let currentTab = 'concept';
+
+function fmtPct(v){ if(v==null)return'-'; return(v>0?'+':'')+Number(v).toFixed(2)+'%'; }
+function fmtNet(v){ if(v==null)return'-'; return(v>=0?'+':'')+Number(v).toFixed(2)+'亿'; }
+function pctClass(v){ return v>0?'up':v<0?'down':'flat'; }
+
+function updateOverview(rows) {
+  const up   = rows.filter(r=>r.change_pct>0);
+  const down = rows.filter(r=>r.change_pct<0);
+  const sorted = [...rows].sort((a,b)=>(b.change_pct||0)-(a.change_pct||0));
+  const netSorted = [...rows].filter(r=>r.net!=null).sort((a,b)=>b.net-a.net);
+  const avgUp   = up.length   ? (up.reduce((s,r)=>s+(r.change_pct||0),0)/up.length).toFixed(2) : '--';
+  const avgDown = down.length ? (down.reduce((s,r)=>s+(r.change_pct||0),0)/down.length).toFixed(2) : '--';
+
+  document.getElementById('ov-total').textContent    = rows.length;
+  document.getElementById('ov-up').textContent       = up.length;
+  document.getElementById('ov-up-avg').textContent   = up.length ? `均涨 +${avgUp}%` : '--';
+  document.getElementById('ov-down').textContent     = down.length;
+  document.getElementById('ov-down-avg').textContent = down.length ? `均跌 ${avgDown}%` : '--';
+  if(sorted[0]) {
+    document.getElementById('ov-top-pct').textContent  = fmtPct(sorted[0].change_pct);
+    document.getElementById('ov-top-name').textContent = sorted[0].name||'--';
+  }
+  if(netSorted[0]) {
+    document.getElementById('ov-top-net').textContent      = fmtNet(netSorted[0].net);
+    document.getElementById('ov-top-net-name').textContent = netSorted[0].name||'--';
+  }
+  document.getElementById('ov-tab-name').textContent = currentTab==='concept'?'概念板块':'行业板块';
+}
+
+function renderTable(rows) {
+  const q = document.getElementById('search-input').value.trim();
+  const filtered = q ? rows.filter(r=>r.name&&r.name.includes(q)) : rows;
+  const tbody = document.getElementById('board-tbody');
+  if(!filtered.length){
+    tbody.innerHTML='<tr><td colspan="6" class="text-center text-muted py-4">暂无数据</td></tr>';return;
+  }
+
+  const maxUp  = Math.max(...filtered.map(r=>r.up_count||0), 1);
+  const maxDn  = Math.max(...filtered.map(r=>r.down_count||0), 1);
+  const maxNet = Math.max(...filtered.map(r=>Math.abs(r.net||0)), 1);
+
+  tbody.innerHTML = filtered.map((d,i)=>{
+    const cls    = pctClass(d.change_pct);
+    const netCls = d.net!=null ? pctClass(d.net) : 'flat';
+    const upW    = d.up_count   ? Math.round(d.up_count/maxUp*50)    : 0;
+    const dnW    = d.down_count ? Math.round(d.down_count/maxDn*50)  : 0;
+    const netW   = d.net!=null  ? Math.round(Math.abs(d.net)/maxNet*50) : 0;
+    const topChgCls = d.top_stock_chg!=null ? pctClass(d.top_stock_chg) : 'flat';
+
+    return `<tr onclick="window.location='/boards/${currentTab}/${encodeURIComponent(d.name)}'">
+      <td class="num text-muted" style="font-size:.74rem;padding-left:14px">${i+1}</td>
+      <td>
+        <span class="fw-semibold" style="font-size:.9rem">${d.name||'-'}</span>
+        ${d.company_count!=null?`<span class="text-muted ms-1 num" style="font-size:.7rem">${d.company_count}家</span>`:''}
+      </td>
+      <td class="text-end">
+        <span class="pct-big ${cls}">${fmtPct(d.change_pct)}</span>
+      </td>
+      <td>
+        <div style="display:flex;align-items:center;gap:4px;justify-content:center">
+          <span class="up num" style="font-size:.75rem;width:28px;text-align:right;font-weight:700">${d.up_count??'-'}</span>
+          <div style="width:100px;height:8px;background:var(--border);border-radius:4px;overflow:hidden;display:flex">
+            <div style="width:${upW}%;background:var(--up);margin-left:${50-upW}%"></div>
+            <div style="width:1px;background:rgba(0,0,0,.1)"></div>
+            <div style="width:${dnW}%;background:var(--down)"></div>
+          </div>
+          <span class="down num" style="font-size:.75rem;width:28px;font-weight:700">${d.down_count??'-'}</span>
+        </div>
+      </td>
+      <td class="text-end">
+        <div class="d-flex align-items-center justify-content-end gap-2">
+          <div class="net-bar-wrap">
+            <div class="net-bar-fill ${netCls}" style="width:${netW}%"></div>
+          </div>
+          <span class="num ${netCls} fw-semibold" style="font-size:.82rem;min-width:60px;text-align:right">${d.net!=null?fmtNet(d.net):'-'}</span>
+        </div>
+      </td>
+      <td>
+        <span class="fw-semibold" style="font-size:.84rem">${d.top_stock||'-'}</span>
+        ${d.top_stock_chg!=null?`<span class="${topChgCls} num ms-1" style="font-size:.75rem">${fmtPct(d.top_stock_chg)}</span>`:''}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function sortBy(key) {
+  if(currentSort.key===key) currentSort.desc=!currentSort.desc;
+  else { currentSort.key=key; currentSort.desc=true; }
+  // 更新排序图标
+  document.querySelectorAll('.sort-icon').forEach(el=>el.textContent='↕');
+  const thMap = { change_pct:'th-chg', net:'th-net' };
+  if(thMap[key]) document.querySelector(`#${thMap[key]} .sort-icon`).textContent = currentSort.desc?'↓':'↑';
+  allRows.sort((a,b)=>{ const av=a[key]??-Infinity,bv=b[key]??-Infinity; return currentSort.desc?bv-av:av-bv; });
+  renderTable(allRows);
+}
+function filterTable(){ renderTable(allRows); }
+
+function loadBoards(type) {
+  document.getElementById('board-tbody').innerHTML =
+    '<tr><td colspan="6" class="text-center text-muted py-5">加载中，约需 15 秒...</td></tr>';
+  fetch(`/api/boards?board_type=${type}&sort=change_pct&order=desc`).then(r=>r.json()).then(data=>{
+    allRows = data.filter(d=>!d.error);
+    updateOverview(allRows);
+    document.getElementById('update-time').textContent = `共 ${allRows.length} 个`;
+    renderTable(allRows);
+  }).catch(()=>{
+    document.getElementById('board-tbody').innerHTML =
+      '<tr><td colspan="6" class="text-center text-danger py-3">加载失败，请刷新</td></tr>';
+  });
+}
+
+function switchTab(type, btn) {
+  document.querySelectorAll('.tab-seg button').forEach(b=>{
+    b.classList.toggle('active', b===btn);
+  });
+  currentTab = type;
+  document.getElementById('search-input').value = '';
+  loadBoards(type);
+}
+
+loadBoards('concept');
+</script>
+{% endblock %}

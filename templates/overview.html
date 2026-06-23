@@ -1,0 +1,543 @@
+{% extends "base.html" %}
+{% block title %}大盘概览 - 股票雷达{% endblock %}
+
+{% block head %}
+<style>
+  /* 情绪条 */
+  .breadth-bar {
+    background: linear-gradient(90deg, var(--dark1) 0%, var(--dark3) 100%);
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,.06);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: wrap;
+  }
+  .breadth-item {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 4px 16px;
+    border-right: 1px solid rgba(255,255,255,.07);
+  }
+  .breadth-item:last-child { border-right: none; }
+  .breadth-item .bi-label { font-size: .67rem; color: rgba(255,255,255,.35); letter-spacing: .6px; text-transform: uppercase; margin-bottom: 2px; }
+  .breadth-item .bi-value { font-size: 1.3rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .breadth-item .bi-sub   { font-size: .68rem; color: rgba(255,255,255,.3); margin-top: 1px; }
+
+  /* 进度条（上涨/下跌比例） */
+  .breadth-ratio { flex: 1; min-width: 160px; padding: 4px 16px; }
+  .ratio-bar { height: 6px; border-radius: 3px; overflow: hidden; display: flex; margin-top: 6px; }
+  .ratio-bar .up-seg   { background: var(--up);   }
+  .ratio-bar .flat-seg { background: rgba(255,255,255,.2); }
+  .ratio-bar .down-seg { background: var(--down); }
+
+  /* 北向资金卡 */
+  .north-card {
+    background: linear-gradient(135deg, #0d1a2e 0%, #142038 100%);
+    border: 1px solid rgba(61,126,252,.2);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .north-card-total { background: linear-gradient(135deg, #0d1a2e 0%, #162540 100%); }
+  .north-card .nc-label { font-size: .7rem; color: rgba(255,255,255,.35); letter-spacing: .5px; }
+  .north-card .nc-val   { font-size: 1.4rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .north-card .nc-ud    { display:flex; gap:10px; margin-top:6px; }
+  .north-card .nc-ud-item { display:flex; align-items:baseline; gap:4px; }
+  .north-card .nc-ud-label { font-size:.95rem; font-weight:700; line-height:1; }
+  .north-card .nc-ud-num   { font-size:1.15rem; font-weight:800; font-variant-numeric:tabular-nums; line-height:1; }
+  .north-card .nc-ud-item.up-item   .nc-ud-label { color:#f08090; }
+  .north-card .nc-ud-item.up-item   .nc-ud-num   { color:#f08090; }
+  .north-card .nc-ud-item.down-item .nc-ud-label { color:#56c98e; }
+  .north-card .nc-ud-item.down-item .nc-ud-num   { color:#56c98e; }
+
+  /* 热力图切换按钮 */
+  .hm-btn {
+    padding: 3px 12px; border-radius: 5px; font-size: .75rem; cursor: pointer;
+    background: transparent; color: var(--text2);
+    border: 1px solid var(--border); transition: all .15s;
+  }
+  .hm-btn-active {
+    background: rgba(61,126,252,.3); color: #fff; border-color: rgba(61,126,252,.4);
+  }
+  [data-theme="light"] .hm-btn { color: var(--text2); border-color: var(--border2); }
+  [data-theme="light"] .hm-btn-active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  /* 连板梯队 */
+  .zt-tier { display: inline-block; min-width: 28px; text-align: center;
+    padding: 1px 6px; border-radius: 4px; font-size: .72rem; font-weight: 700; }
+  .zt-tier.t1 { background: rgba(232,55,74,.15); color: #f08090; }
+  .zt-tier.t2 { background: rgba(232,55,74,.3);  color: #f06070; }
+  .zt-tier.t3 { background: rgba(232,55,74,.5);  color: #e8374a; }
+  .zt-tier.t4 { background: rgba(232,55,74,.75); color: #fff;    }
+
+  /* 龙虎榜 */
+  .lhb-reason { font-size: .7rem; color: rgba(255,255,255,.35); max-width: 200px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .net-buy-pos { color: #f08090; font-weight: 700; }
+  .net-buy-neg { color: #56c98e; font-weight: 700; }
+
+  /* 深色表格（overview 专用） */
+  .dt-dark { background: transparent; color: rgba(255,255,255,.82); }
+  .dt-dark thead th {
+    background: rgba(255,255,255,.04);
+    color: rgba(255,255,255,.38);
+    border-bottom: 1px solid rgba(255,255,255,.08);
+    font-size: .72rem; letter-spacing: .5px; padding: 7px 12px;
+  }
+  .dt-dark tbody td {
+    border-color: rgba(255,255,255,.05);
+    padding: 8px 12px;
+    color: rgba(255,255,255,.82);
+    vertical-align: middle;
+  }
+  .dt-dark tbody tr:hover { background: rgba(255,255,255,.07); }
+  .dt-dark tbody tr:hover td { background: transparent; }
+  .dt-dark .text-muted { color: rgba(255,255,255,.32) !important; }
+  /* panel 深色 body */
+  .panel-dark-body { background: linear-gradient(180deg, var(--dark2) 0%, var(--dark1) 100%); }
+
+  /* ══ 亮色模式覆盖 ══ */
+  [data-theme="light"] .breadth-bar {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+  }
+  [data-theme="light"] .breadth-item { border-right-color: var(--border); }
+  [data-theme="light"] .breadth-item .bi-label { color: var(--text3); }
+  [data-theme="light"] .breadth-item .bi-sub   { color: var(--text3); }
+  [data-theme="light"] #b-zt-real { color: var(--up) !important; opacity: .55; }
+  [data-theme="light"] #b-dt-real { color: var(--down) !important; opacity: .55; }
+  [data-theme="light"] .ratio-bar .flat-seg { background: var(--border2); }
+
+  [data-theme="light"] .north-card,
+  [data-theme="light"] .north-card-total {
+    background: #f0f5ff;
+    border-color: rgba(61,126,252,.2);
+  }
+  [data-theme="light"] .north-card .nc-label { color: var(--text3); }
+  [data-theme="light"] .north-card .nc-val   { color: var(--text1); }
+  [data-theme="light"] .north-card .nc-ud-item.up-item   .nc-ud-label,
+  [data-theme="light"] .north-card .nc-ud-item.up-item   .nc-ud-num   { color: var(--up); }
+  [data-theme="light"] .north-card .nc-ud-item.down-item .nc-ud-label,
+  [data-theme="light"] .north-card .nc-ud-item.down-item .nc-ud-num   { color: var(--down); }
+
+  [data-theme="light"] .panel-dark-body { background: transparent; }
+  [data-theme="light"] .dt-dark { color: var(--text1); }
+  [data-theme="light"] .dt-dark thead th {
+    background: var(--thead-bg); color: var(--text2);
+    border-bottom-color: var(--border);
+  }
+  [data-theme="light"] .dt-dark tbody td   { border-color: var(--td-border); color: var(--text1); }
+  [data-theme="light"] .dt-dark tbody tr:hover   { background: var(--tbody-hover); }
+  [data-theme="light"] .dt-dark tbody tr:hover td { background: transparent; }
+  [data-theme="light"] .dt-dark .text-muted { color: var(--text3) !important; }
+
+  [data-theme="light"] #tier-bar { border-bottom-color: var(--border); background: transparent; }
+  [data-theme="light"] .zt-tier.t1 { background: #fff0f1; color: var(--up); }
+  [data-theme="light"] .zt-tier.t2 { background: #ffe0e3; color: #d42c3e; }
+  [data-theme="light"] .zt-tier.t3 { background: #ffc6ca; color: #c01e30; }
+  [data-theme="light"] .zt-tier.t4 { background: var(--up); color: #fff; }
+
+  [data-theme="light"] .lhb-reason { color: var(--text3); }
+  [data-theme="light"] .net-buy-pos { color: var(--up); }
+  [data-theme="light"] .net-buy-neg { color: var(--down); }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- ① 市场情绪条 -->
+<div class="breadth-bar mb-3" id="breadth-bar">
+  <div class="breadth-item">
+    <div class="bi-label">上涨</div>
+    <div class="bi-value up" id="b-up">--</div>
+    <div class="bi-sub">家</div>
+  </div>
+  <div class="breadth-item">
+    <div class="bi-label">涨停</div>
+    <div class="bi-value up" id="b-zt">--</div>
+    <div class="bi-sub" id="b-zt-real" style="color:rgba(232,55,74,.5)">真实 --</div>
+  </div>
+  <div class="breadth-item">
+    <div class="bi-label">平盘</div>
+    <div class="bi-value flat" id="b-flat">--</div>
+    <div class="bi-sub">家</div>
+  </div>
+  <div class="breadth-item">
+    <div class="bi-label">下跌</div>
+    <div class="bi-value down" id="b-down">--</div>
+    <div class="bi-sub">家</div>
+  </div>
+  <div class="breadth-item">
+    <div class="bi-label">跌停</div>
+    <div class="bi-value down" id="b-dt">--</div>
+    <div class="bi-sub" id="b-dt-real" style="color:rgba(24,163,97,.5)">真实 --</div>
+  </div>
+  <div class="breadth-ratio">
+    <div class="d-flex justify-content-between" style="font-size:.68rem;color:var(--text3)">
+      <span>市场情绪</span>
+      <span id="b-activity">--</span>
+    </div>
+    <div class="ratio-bar" id="ratio-bar">
+      <div class="up-seg" style="width:50%"></div>
+      <div class="flat-seg" style="width:2%"></div>
+      <div class="down-seg" style="width:48%"></div>
+    </div>
+    <div class="d-flex justify-content-between mt-1" style="font-size:.67rem">
+      <span class="up" id="ratio-up-pct">--</span>
+      <span class="down" id="ratio-down-pct">--</span>
+    </div>
+  </div>
+</div>
+
+<!-- ② 指数卡片 -->
+<div class="row g-2 mb-3" id="index-cards">
+  {% for i in range(6) %}
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="idx-card flat"><div class="idx-name">--</div><div class="idx-price">--</div><div class="idx-chg">--</div></div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- ③ 热力图 + 右侧面板 -->
+<div class="row g-3 mb-3">
+  <div class="col-lg-8">
+    <div class="panel h-100 d-flex flex-column">
+      <div class="panel-hd flex-shrink-0">
+        <div class="hd-title"><div class="accent-bar"></div>板块热力图</div>
+        <div class="btn-group btn-group-sm">
+          <button class="hm-btn hm-btn-active" id="btn-concept" onclick="switchHeatmap('concept')">概念</button>
+          <button class="hm-btn" id="btn-industry" onclick="switchHeatmap('industry')">行业</button>
+        </div>
+      </div>
+      <div style="flex:1;min-height:0">
+        <div id="heatmap" style="width:100%;height:100%;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4 d-flex flex-column gap-3">
+    <!-- 北向资金 -->
+    <div class="panel">
+      <div class="panel-hd">
+        <div class="hd-title"><div class="accent-bar"></div>北向资金（沪深港通）</div>
+      </div>
+      <div class="panel-body">
+        <div class="row g-2" id="north-cards">
+          <div class="col-6">
+            <div class="north-card">
+              <div class="nc-label">沪股通净买入</div>
+              <div class="nc-val" id="n-sh">--</div>
+              <div class="nc-ud" id="n-sh-ud"></div>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="north-card">
+              <div class="nc-label">深股通净买入</div>
+              <div class="nc-val" id="n-sz">--</div>
+              <div class="nc-ud" id="n-sz-ud"></div>
+            </div>
+          </div>
+          <div class="col-12">
+            <div class="north-card north-card-total">
+              <div class="d-flex justify-content-between align-items-center">
+                <div class="nc-label">合计北向净流入</div>
+                <div class="nc-val" id="n-total">--</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 行业资金流 -->
+    <div class="panel flex-grow-1">
+      <div class="panel-hd">
+        <div class="hd-title"><div class="accent-bar"></div>行业资金净流入 TOP8</div>
+      </div>
+      <div class="panel-body-flush panel-dark-body">
+        <table class="data-table dt-dark" id="flow-table">
+          <thead><tr><th>行业</th><th class="text-end">净流入</th><th class="text-end">涨跌幅</th></tr></thead>
+          <tbody><tr><td colspan="3" class="text-center text-muted py-3" style="font-size:.82rem">加载中...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ④ 连板梯队 + 龙虎榜 -->
+<div class="row g-3 mb-3">
+  <!-- 涨停板 & 连板梯队 -->
+  <div class="col-lg-7">
+    <div class="panel d-flex flex-column" style="height:480px">
+      <div class="panel-hd flex-shrink-0">
+        <div class="hd-title"><div class="accent-bar"></div>今日涨停板</div>
+        <div class="d-flex gap-3 align-items-center">
+          <div id="tier-summary" style="font-size:.72rem;color:var(--text3)"></div>
+          <span id="zt-count" style="font-size:.72rem;color:var(--text3)"></span>
+        </div>
+      </div>
+      <!-- 连板梯队摘要 -->
+      <div id="tier-bar" class="px-3 pt-2 pb-1 d-flex gap-2 flex-wrap flex-shrink-0 panel-dark-body" style="border-bottom:1px solid var(--border)"></div>
+      <div class="panel-body-flush panel-dark-body flex-grow-1" style="min-height:0;overflow-y:auto">
+        <table class="data-table dt-dark" id="zt-table">
+          <thead style="position:sticky;top:0;z-index:1">
+            <tr>
+              <th>代码</th><th>名称</th><th>行业</th>
+              <th class="text-center">连板</th>
+              <th class="text-center">炸板</th>
+              <th class="text-end">封板资金</th>
+            </tr>
+          </thead>
+          <tbody><tr><td colspan="6" class="text-center text-muted py-3">加载中...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 龙虎榜 -->
+  <div class="col-lg-5">
+    <div class="panel d-flex flex-column" style="height:480px">
+      <div class="panel-hd flex-shrink-0">
+        <div class="hd-title"><div class="accent-bar"></div>今日龙虎榜</div>
+        <span style="font-size:.72rem;color:var(--text3)">净买额排行</span>
+      </div>
+      <div class="panel-body-flush panel-dark-body flex-grow-1" style="min-height:0;overflow-y:auto">
+        <table class="data-table dt-dark" id="lhb-table">
+          <thead style="position:sticky;top:0;z-index:1">
+            <tr>
+              <th>名称</th><th class="text-end">涨跌幅</th>
+              <th class="text-end">净买额</th><th>上榜原因</th>
+            </tr>
+          </thead>
+          <tbody><tr><td colspan="4" class="text-center text-muted py-3">加载中...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const heatmap = echarts.init(document.getElementById('heatmap'));
+let _hmType = 'concept';
+
+heatmap.on('click', params => {
+  if (params.data && params.data.name) {
+    location.href = `/boards/${_hmType}/${encodeURIComponent(params.data.name)}`;
+  }
+});
+
+function pctColor(v){
+  if(v>0) return `rgba(232,55,74,${Math.min(Math.abs(v)/5,1)*.75+.2})`;
+  if(v<0) return `rgba(24,163,97,${Math.min(Math.abs(v)/5,1)*.75+.2})`;
+  return '#3a4260';
+}
+function fmtPct(v){ if(v==null)return'-'; return(v>0?'+':'')+Number(v).toFixed(2)+'%'; }
+function fmtNet(v){ if(v==null)return'-'; return(v>=0?'+':'')+Number(v).toFixed(2)+'亿'; }
+function fmtAmt(v){
+  if(v==null)return'-';
+  const a=Math.abs(v);
+  if(a>=1e8) return(v/1e8).toFixed(2)+'亿';
+  if(a>=1e4) return(v/1e4).toFixed(0)+'万';
+  return String(v);
+}
+function fmtM(v){ // 单位：元 → 万/亿
+  if(v==null)return'-';
+  const a=Math.abs(v);
+  if(a>=1e8) return (v>=0?'+':'')+(v/1e8).toFixed(2)+'亿';
+  if(a>=1e4) return (v>=0?'+':'')+(v/1e4).toFixed(0)+'万';
+  return String(v);
+}
+function pctClass(v){ return v>0?'up':v<0?'down':'flat'; }
+
+/* ── ① 市场情绪 ── */
+fetch('/api/market/breadth').then(r=>r.json()).then(d=>{
+  if(d.error) return;
+  const up=d.up||0, dn=d.down||0, fl=d.flat||0, total=up+dn+fl;
+  document.getElementById('b-up').textContent   = up;
+  document.getElementById('b-zt').textContent   = d.zt||0;
+  document.getElementById('b-zt-real').textContent = `真实 ${d.zt_real||0}`;
+  document.getElementById('b-flat').textContent = fl;
+  document.getElementById('b-down').textContent  = dn;
+  document.getElementById('b-dt').textContent   = d.dt||0;
+  document.getElementById('b-dt-real').textContent = `真实 ${d.dt_real||0}`;
+  document.getElementById('b-activity').textContent = `活跃度 ${d.activity||'--'}%`;
+  if(total>0){
+    const upW=Math.round(up/total*100), dnW=Math.round(dn/total*100), flW=100-upW-dnW;
+    document.getElementById('ratio-bar').innerHTML =
+      `<div class="up-seg" style="width:${upW}%"></div>
+       <div class="flat-seg" style="width:${Math.max(flW,1)}%"></div>
+       <div class="down-seg" style="width:${dnW}%"></div>`;
+    document.getElementById('ratio-up-pct').textContent  = `涨 ${upW}%`;
+    document.getElementById('ratio-down-pct').textContent = `跌 ${dnW}%`;
+  }
+});
+
+/* ── ② 指数 ── */
+function loadIndices(){
+  fetch('/api/indices').then(r=>r.json()).then(data=>{
+    document.getElementById('index-cards').innerHTML = data.map(d=>{
+      const cls=pctClass(d.change_pct);
+      const chgAbs=d.price!=null&&d.prev_close?(d.price-d.prev_close).toFixed(2):'--';
+      const amtStr=d.amount>0?fmtAmt(d.amount):'';
+      return `<div class="col-6 col-md-4 col-xl-2">
+        <div class="idx-card ${cls}">
+          <div class="idx-name">${d.name}</div>
+          <div class="idx-price ${cls} num">${d.price!=null?d.price.toFixed(2):'--'}</div>
+          <div class="d-flex gap-2 mt-1">
+            <span class="idx-chg ${cls} num">${fmtPct(d.change_pct)}</span>
+            <span class="idx-chg ${cls} num" style="opacity:.7">${chgAbs}</span>
+          </div>
+          ${amtStr?`<div class="num" style="font-size:.67rem;color:var(--text3);margin-top:3px">${amtStr}</div>`:''}
+        </div>
+      </div>`;
+    }).join('');
+  });
+}
+loadIndices();
+setInterval(loadIndices, 60000);
+
+/* ── 热力图 ── */
+function loadHeatmap(type){
+  _hmType = type;
+  fetch(`/api/boards?board_type=${type}&sort=change_pct&order=desc`).then(r=>r.json()).then(data=>{
+    const rows=data.filter(d=>!d.error).slice(0,60);
+    heatmap.setOption({
+      backgroundColor:'transparent',
+      tooltip:{
+        backgroundColor:'rgba(13,21,38,.92)',borderColor:'rgba(255,255,255,.1)',
+        textStyle:{color:'#e0e8f8',fontSize:12},
+        formatter:p=>`<b>${p.data.name}</b><br>涨跌幅: <span style="color:${p.data.value>0?'#f67280':'#56c98e'}">${fmtPct(p.data.value)}</span>`
+      },
+      series:[{
+        type:'treemap',roam:false,nodeClick:false,cursor:'pointer',
+        breadcrumb:{show:false},
+        left:0,right:0,top:0,bottom:0,
+        squareRatio:1,
+        itemStyle:{borderWidth:1,borderColor:'#1a2845',gapWidth:1},
+        data:rows.map(d=>({
+          name:d.name,value:Math.abs(d.mkt_cap)||1,rawValue:d.change_pct,
+          itemStyle:{color:pctColor(d.change_pct)},
+          label:{
+            formatter:p=>`{a|${p.data.name}}\n{b|${fmtPct(p.data.rawValue)}}`,
+            rich:{
+              a:{color:'rgba(255,255,255,.9)',fontSize:11,fontWeight:600},
+              b:{color:'rgba(255,255,255,.75)',fontSize:11,fontFamily:'Roboto Mono,monospace'}
+            }
+          }
+        }))
+      }]
+    });
+  });
+}
+function switchHeatmap(type){
+  ['concept','industry'].forEach(t=>{
+    document.getElementById('btn-'+t).classList.toggle('hm-btn-active', t===type);
+  });
+  loadHeatmap(type);
+}
+loadHeatmap('concept');
+
+/* ── 北向资金 ── */
+fetch('/api/market/north').then(r=>r.json()).then(d=>{
+  if(d.error) return;
+  const shN=d.sh_net, szN=d.sz_net;
+  const total=(shN||0)+(szN||0);
+  const shCls=shN>=0?'up':'down', szCls=szN>=0?'up':'down', totCls=total>=0?'up':'down';
+  document.getElementById('n-sh').innerHTML = `<span class="${shCls} num">${fmtM(shN)}</span>`;
+  document.getElementById('n-sz').innerHTML = `<span class="${szCls} num">${fmtM(szN)}</span>`;
+  const udHtml = (up,dn) =>
+    `<div class="nc-ud-item up-item"><span class="nc-ud-label">↑</span><span class="nc-ud-num">${up||'--'}</span></div>` +
+    `<div class="nc-ud-item down-item"><span class="nc-ud-label">↓</span><span class="nc-ud-num">${dn||'--'}</span></div>`;
+  document.getElementById('n-sh-ud').innerHTML = udHtml(d.sh_up, d.sh_down);
+  document.getElementById('n-sz-ud').innerHTML = udHtml(d.sz_up, d.sz_down);
+  document.getElementById('n-total').innerHTML = `<span class="${totCls} num">${fmtM(total)}</span>`;
+});
+
+/* ── 行业资金流 ── */
+fetch('/api/flow/industry').then(r=>r.json()).then(data=>{
+  const rows=data.filter(d=>!d.error).slice(0,8);
+  const tbody=document.querySelector('#flow-table tbody');
+  if(!rows.length){tbody.innerHTML='<tr><td colspan="3" class="text-muted text-center py-2">暂无数据</td></tr>';return;}
+  tbody.innerHTML=rows.map(d=>`
+    <tr>
+      <td class="fw-semibold" style="font-size:.82rem">${d.name||'-'}</td>
+      <td class="text-end num ${d.net>0?'up':'down'} fw-bold" style="font-size:.8rem">${fmtNet(d.net)}</td>
+      <td class="text-end"><span class="chg-badge ${pctClass(d.change_pct)}">${fmtPct(d.change_pct)}</span></td>
+    </tr>`).join('');
+});
+
+/* ── 涨停板 + 连板梯队 ── */
+function loadZT(){
+  fetch('/api/zt').then(r=>r.json()).then(data=>{
+    const rows=Array.isArray(data)?data.filter(d=>!d.error):[];
+    document.getElementById('zt-count').textContent=rows.length?`共 ${rows.length} 只`:'';
+
+    // 连板梯队分组（使用正确的 zt_days 字段）
+    const tierMap={};
+    rows.forEach(d=>{
+      const n=Number(d.zt_days)||1;
+      tierMap[n]=(tierMap[n]||0)+1;
+    });
+    const tierBar=document.getElementById('tier-bar');
+    const tiers=Object.entries(tierMap).sort((a,b)=>Number(b[0])-Number(a[0]));
+    tierBar.innerHTML=tiers.map(([n,cnt])=>{
+      const lv=Number(n)>=4?'t4':Number(n)===3?'t3':Number(n)===2?'t2':'t1';
+      const label=Number(n)>=4?`${n}板+`:Number(n)===1?'首板':`${n}板`;
+      return `<div class="d-flex align-items-center gap-1">
+        <span class="zt-tier ${lv}">${label}</span>
+        <span style="font-size:.75rem;color:var(--text2)">${cnt}只</span>
+      </div>`;
+    }).join('<span style="color:var(--border2);margin:0 4px">·</span>');
+
+    const tbody=document.querySelector('#zt-table tbody');
+    if(!rows.length){tbody.innerHTML='<tr><td colspan="6" class="text-center text-muted py-3">暂无数据或非交易日</td></tr>';return;}
+
+    // 按连板数降序排列
+    const sorted=[...rows].sort((a,b)=>(Number(b.zt_days)||1)-(Number(a.zt_days)||1));
+    tbody.innerHTML=sorted.slice(0,30).map(d=>{
+      const n=Number(d.zt_days)||1;
+      const lv=n>=4?'t4':n===3?'t3':n===2?'t2':'t1';
+      const label=n>=4?`${n}板`:n===1?'首板':`${n}板`;
+      const openCnt=d.open_count!=null?Number(d.open_count):null;
+      return `<tr>
+        <td class="num text-muted" style="font-size:.78rem">${d.code||'-'}</td>
+        <td class="fw-bold up">${d.name||'-'}</td>
+        <td class="text-muted" style="font-size:.8rem">${d.industry||'-'}</td>
+        <td class="text-center"><span class="zt-tier ${lv}">${label}</span></td>
+        <td class="text-center num" style="font-size:.8rem;color:${openCnt>0?'#f0a040':'var(--text3)'}">
+          ${openCnt!=null?openCnt+'次':'--'}
+        </td>
+        <td class="text-end num" style="font-size:.8rem">${fmtAmt(d.seal_amount)}</td>
+      </tr>`;
+    }).join('');
+  });
+}
+loadZT();
+
+/* ── 龙虎榜 ── */
+fetch('/api/market/lhb').then(r=>r.json()).then(data=>{
+  const rows=data.filter(d=>!d.error).slice(0,15);
+  const tbody=document.querySelector('#lhb-table tbody');
+  if(!rows.length){tbody.innerHTML='<tr><td colspan="4" class="text-center text-muted py-3">暂无数据</td></tr>';return;}
+  tbody.innerHTML=rows.map(d=>{
+    const cls=pctClass(d.change_pct);
+    const nb=d.net_buy;
+    const nbCls=nb>=0?'net-buy-pos':'net-buy-neg';
+    return `<tr>
+      <td class="fw-semibold" style="font-size:.84rem">${d.name||'-'}</td>
+      <td class="text-end"><span class="chg-badge ${cls}">${fmtPct(d.change_pct)}</span></td>
+      <td class="text-end num ${nbCls}">${fmtM(nb)}</td>
+      <td><div class="lhb-reason" title="${d.reason||''}">${d.reason||'-'}</div></td>
+    </tr>`;
+  }).join('');
+});
+
+
+window.addEventListener('resize',()=>heatmap.resize());
+new ResizeObserver(()=>heatmap.resize()).observe(document.getElementById('heatmap'));
+</script>
+{% endblock %}

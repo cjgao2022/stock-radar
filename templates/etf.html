@@ -1,0 +1,332 @@
+{% extends "base.html" %}
+{% block title %}ETF 行情 - 股票雷达{% endblock %}
+
+{% block head %}
+<style>
+  .range-bar { position:relative;height:4px;background:var(--border);border-radius:2px;width:80px;flex-shrink:0; }
+  .range-bar-dot { position:absolute;width:8px;height:8px;border-radius:50%;top:-2px;transform:translateX(-50%); }
+  .range-bar-dot.up   { background:var(--up); }
+  .range-bar-dot.down { background:var(--down); }
+  .vol-bar-wrap { width:56px;height:5px;background:var(--border);border-radius:3px; }
+  .vol-bar-fill { height:5px;background:linear-gradient(90deg,var(--accent2),var(--accent));border-radius:3px; }
+  .etf-type { display:inline-block;padding:1px 5px;border-radius:3px;font-size:.65rem;font-weight:600;vertical-align:middle;margin-left:4px; }
+  .etf-type.宽基 { background:#eef3ff;color:#3d7efc;border:1px solid #c8d9fc; }
+  .etf-type.行业 { background:#fff4e6;color:#d9700e;border:1px solid #f8d5a0; }
+  .etf-type.跨境 { background:#f0f9f4;color:#18a361;border:1px solid #b8e8d0; }
+  .etf-type.债券 { background:#f9f0ff;color:#8b5cf6;border:1px solid #d4b8f8; }
+
+  /* 深色主题覆盖 */
+  [data-theme="dark"] .etf-type.宽基 { background:rgba(61,126,252,.18);color:#7ab3f8;border-color:rgba(61,126,252,.32); }
+  [data-theme="dark"] .etf-type.行业 { background:rgba(217,112,14,.18);color:#f0a05a;border-color:rgba(217,112,14,.32); }
+  [data-theme="dark"] .etf-type.跨境 { background:rgba(24,163,97,.18);color:#56c98e;border-color:rgba(24,163,97,.32); }
+  [data-theme="dark"] .etf-type.债券 { background:rgba(139,92,246,.18);color:#c4a8fa;border-color:rgba(139,92,246,.32); }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- 汇总统计 -->
+<div class="row g-2 mb-3">
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="sc-label">持仓 ETF</div>
+      <div class="sc-value num" id="stat-count">--</div>
+      <div class="sc-sub">自选列表</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="sc-label">今日上涨</div>
+      <div class="sc-value num up" id="stat-up">--</div>
+      <div class="sc-sub" id="stat-up-pct">--</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="sc-label">今日下跌</div>
+      <div class="sc-value num down" id="stat-down">--</div>
+      <div class="sc-sub" id="stat-down-pct">--</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="sc-label">合计成交额</div>
+      <div class="sc-value num" id="stat-amount">--</div>
+      <div class="sc-sub">全部自选 ETF</div>
+    </div>
+  </div>
+</div>
+
+<!-- 行情面板 -->
+<div class="panel mb-3">
+  <div class="panel-hd">
+    <div class="hd-title"><div class="accent-bar"></div>ETF 实时行情</div>
+    <div class="d-flex align-items-center gap-3">
+      <div class="search-wrap">
+        <span class="si">🔍</span>
+        <input type="text" class="form-control form-control-sm" id="filter-input"
+               placeholder="筛选名称/代码..." style="width:150px" oninput="filterRows()">
+      </div>
+      <span id="refresh-hint" style="font-size:.72rem;color:var(--text3)">--</span>
+    </div>
+  </div>
+  <div class="panel-body-flush table-responsive">
+    <table class="data-table" id="etf-table">
+      <thead>
+        <tr>
+          <th class="sortable" onclick="sortBy('code')">代码</th>
+          <th>名称</th>
+          <th class="text-end sortable" onclick="sortBy('price')">最新价</th>
+          <th class="text-end sortable" onclick="sortBy('change_pct')">涨跌幅</th>
+          <th class="text-end sortable" onclick="sortBy('change_abs')">涨跌额</th>
+          <th class="text-center">日内区间</th>
+          <th class="text-end sortable" onclick="sortBy('amount')">成交额</th>
+          <th class="text-center sortable" onclick="sortBy('amount')">量比</th>
+          <th class="text-center" style="white-space:nowrap">加入时间</th>
+          <th style="width:44px"></th>
+        </tr>
+      </thead>
+      <tbody id="etf-tbody">
+        <tr><td colspan="10" class="text-center text-muted py-4">加载中...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 代码查询 -->
+<div class="panel">
+  <div class="panel-hd">
+    <div class="hd-title"><div class="accent-bar"></div>ETF 代码查询</div>
+  </div>
+  <div class="panel-body">
+    <div class="d-flex gap-2" style="max-width:420px">
+      <div class="search-wrap flex-grow-1">
+        <span class="si">🔍</span>
+        <input type="text" class="form-control" id="search-input"
+               placeholder="代码或名称（如 510300 / 沪深300）" maxlength="10">
+      </div>
+      <button class="btn btn-primary px-4" onclick="doSearch()" style="border-radius:7px">查询</button>
+      <button class="btn btn-outline-secondary px-3" onclick="clearSearch()" style="border-radius:7px">清空</button>
+    </div>
+    <div id="search-result" class="mt-3"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.btn-rm { border:none;background:transparent;color:var(--text3);font-size:1rem;line-height:1;
+  padding:2px 6px;border-radius:4px;cursor:pointer;transition:all .15s; }
+.btn-rm:hover { background:rgba(239,68,68,.15);color:#ef4444; }
+.btn-add { border:1px solid var(--accent);background:transparent;color:var(--accent);
+  font-size:.72rem;padding:2px 8px;border-radius:5px;cursor:pointer;white-space:nowrap;transition:all .15s; }
+.btn-add:hover { background:var(--accent);color:#fff; }
+.btn-add.in-wl { border-color:var(--up);color:var(--up);cursor:default; }
+.btn-add.in-wl:hover { background:transparent;color:var(--up); }
+</style>
+<script>
+let allData=[], maxAmount=1, watchlistCodes=new Set();
+let sortState={key:'change_pct',desc:false};
+
+function fmtPct(v){ if(v==null)return'-'; return(v>0?'+':'')+Number(v).toFixed(2)+'%'; }
+function fmtAmt(v){
+  if(v==null)return'-';
+  if(Math.abs(v)>=1e8)return(v/1e8).toFixed(2)+'亿';
+  return(v/1e4).toFixed(0)+'万';
+}
+function fmtVol(v){
+  if(v==null||v===0)return'-';
+  if(v>=1e8)return(v/1e8).toFixed(1)+'亿手';
+  if(v>=1e4)return(v/1e4).toFixed(1)+'万手';
+  return v.toFixed(0)+'手';
+}
+function pctClass(v){ return v>0?'up':v<0?'down':'flat'; }
+function now(){ return new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Asia/Shanghai'}); }
+
+/* ── 持仓操作 ── */
+function removeEtf(code, btn){
+  requireCode(code, async ()=>{
+    btn.disabled=true;
+    await fetch(`/api/stocks/etf/watchlist/${code}`,{method:'DELETE'});
+    const row=btn.closest('tr');
+    row.style.transition='opacity .25s';row.style.opacity='0';
+    setTimeout(()=>loadETF(),280);
+  });
+}
+function addEtf(code, name, btn){
+  if(btn.classList.contains('in-wl'))return;
+  requireCode(code, async ()=>{
+    btn.disabled=true;btn.textContent='加入中...';
+    await fetch(`/api/stocks/etf/watchlist/${code}?name=${encodeURIComponent(name)}`,{method:'POST'});
+    btn.textContent='✓ 已持仓';btn.classList.add('in-wl');btn.disabled=false;
+    watchlistCodes.add(code);
+    loadETF();
+  });
+}
+function addBtn(code,name){
+  return watchlistCodes.has(code)
+    ?`<button class="btn-add in-wl" disabled>✓ 已持仓</button>`
+    :`<button class="btn-add" onclick="addEtf('${code}','${escQ(name)}',this)">＋ 加入持仓</button>`;
+}
+function escQ(s){ return s.replace(/'/g,"\\'"); }
+
+function etfRow(d){
+  const cls = pctClass(d.change_pct);
+  const chgAbs = d.price!=null&&d.prev_close!=null ? d.price-d.prev_close : null;
+  const rangeLen = (d.high&&d.low&&d.high>d.low) ? d.high-d.low : 0;
+  const pos = rangeLen>0&&d.price!=null ? Math.min(Math.max((d.price-d.low)/rangeLen,0),1) : .5;
+  const volR = maxAmount>0 ? Math.min(d.amount/maxAmount,1) : 0;
+  return `<tr>
+    <td class="num text-muted" style="font-size:.78rem">${d.code}</td>
+    <td><span class="fw-bold">${d.name||d.code}</span>${d.etf_type?`<span class="etf-type ${d.etf_type}">${d.etf_type}</span>`:''}</td>
+    <td class="text-end num fw-bold ${cls}" style="font-size:1rem">${d.price!=null?Number(d.price).toFixed(3):'-'}</td>
+    <td class="text-end"><span class="chg-badge ${cls}">${fmtPct(d.change_pct)}</span></td>
+    <td class="text-end num ${cls}" style="font-size:.82rem">${chgAbs!=null?(chgAbs>=0?'+':'')+chgAbs.toFixed(3):'-'}</td>
+    <td class="text-center">
+      <div class="d-flex align-items-center gap-1 justify-content-center">
+        <span class="num text-muted" style="font-size:.7rem;width:40px;text-align:right">${d.low!=null?Number(d.low).toFixed(3):'-'}</span>
+        <div class="range-bar"><div class="range-bar-dot ${cls}" style="left:${Math.round(pos*100)}%"></div></div>
+        <span class="num text-muted" style="font-size:.7rem;width:40px">${d.high!=null?Number(d.high).toFixed(3):'-'}</span>
+      </div>
+    </td>
+    <td class="text-end num" style="font-size:.82rem;color:var(--text2)">${fmtAmt(d.amount)}</td>
+    <td class="text-center">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
+        <span class="num" style="font-size:.72rem;color:var(--text2)">${fmtVol(d.volume)}</span>
+        <div class="vol-bar-wrap"><div class="vol-bar-fill" style="width:${Math.round(volR*100)}%"></div></div>
+      </div>
+    </td>
+    <td class="text-center num" style="font-size:.72rem;color:var(--text3);white-space:nowrap">${d.added_at||'-'}</td>
+    <td class="text-center">
+      <button class="btn-rm" onclick="removeEtf('${d.code}',this)" title="移除持仓">×</button>
+    </td>
+  </tr>`;
+}
+
+function sortBy(key){
+  if(sortState.key===key) sortState.desc=!sortState.desc;
+  else { sortState.key=key; sortState.desc=(key!=='code'); }
+  renderTable();
+}
+function getSortVal(d,key){
+  if(key==='change_abs') return d.price!=null&&d.prev_close?d.price-d.prev_close:-Infinity;
+  return d[key]??-Infinity;
+}
+function filterRows(){ renderTable(); }
+function renderTable(){
+  const q=document.getElementById('filter-input').value.trim().toLowerCase();
+  let rows=q?allData.filter(d=>d.name?.toLowerCase().includes(q)||d.code.includes(q)):[...allData];
+  rows.sort((a,b)=>{ const av=getSortVal(a,sortState.key),bv=getSortVal(b,sortState.key); return sortState.desc?bv-av:av-bv; });
+  document.getElementById('etf-tbody').innerHTML = rows.length
+    ? rows.map(etfRow).join('')
+    : '<tr><td colspan="10" class="text-center text-muted py-3">无匹配数据</td></tr>';
+}
+
+function updateStats(data){
+  const up=data.filter(d=>d.change_pct>0), dn=data.filter(d=>d.change_pct<0);
+  const totalAmt=data.reduce((s,d)=>s+(d.amount||0),0);
+  const avgUp=up.length?(up.reduce((s,d)=>s+d.change_pct,0)/up.length).toFixed(2):'--';
+  const avgDn=dn.length?(dn.reduce((s,d)=>s+d.change_pct,0)/dn.length).toFixed(2):'--';
+  document.getElementById('stat-count').textContent=data.length;
+  document.getElementById('stat-up').textContent=up.length;
+  document.getElementById('stat-up-pct').textContent=up.length?`均涨 +${avgUp}%`:'无';
+  document.getElementById('stat-down').textContent=dn.length;
+  document.getElementById('stat-down-pct').textContent=dn.length?`均跌 ${avgDn}%`:'无';
+  document.getElementById('stat-amount').textContent=fmtAmt(totalAmt);
+}
+
+function loadETF(){
+  fetch('/api/stocks/etf/watchlist').then(r=>r.json()).then(data=>{
+    allData=data.filter(d=>!d.error);
+    watchlistCodes=new Set(allData.map(d=>d.code));
+    maxAmount=Math.max(...allData.map(d=>d.amount||0),1);
+    updateStats(allData);renderTable();
+    document.getElementById('refresh-hint').textContent=`更新于 ${now()}`;
+  }).catch(()=>{
+    document.getElementById('etf-tbody').innerHTML='<tr><td colspan="10" class="text-center text-danger py-3">加载失败，请刷新</td></tr>';
+  });
+}
+loadETF();
+setInterval(loadETF,60000);
+
+document.getElementById('search-input').addEventListener('keydown',e=>{ if(e.key==='Enter')doSearch(); });
+
+function renderDetailCard(d){
+  const cls=pctClass(d.change_pct);
+  const chgAbs=d.price!=null&&d.prev_close!=null?d.price-d.prev_close:null;
+  return `<div class="panel" style="max-width:560px">
+    <div class="panel-hd">
+      <div class="hd-title"><div class="accent-bar"></div>${d.name||d.code}
+        <span style="font-size:.72rem;font-weight:400;opacity:.6">${d.code}</span></div>
+      <div class="d-flex align-items-center gap-2">
+        <span class="chg-badge ${cls}">${fmtPct(d.change_pct)}</span>
+        ${addBtn(d.code,d.name||d.code)}
+      </div>
+    </div>
+    <div class="panel-body">
+      <div class="row g-3">
+        <div class="col-4"><div class="text-muted" style="font-size:.72rem">最新价</div>
+          <div class="num fw-bold ${cls}" style="font-size:1.6rem">${d.price!=null?Number(d.price).toFixed(3):'-'}</div></div>
+        <div class="col-4"><div class="text-muted" style="font-size:.72rem">涨跌额</div>
+          <div class="num fw-semibold ${cls}" style="font-size:1rem">${chgAbs!=null?(chgAbs>=0?'+':'')+chgAbs.toFixed(3):'-'}</div></div>
+        <div class="col-4"><div class="text-muted" style="font-size:.72rem">成交额</div>
+          <div class="num" style="font-size:1rem">${fmtAmt(d.amount)}</div></div>
+        <div class="col-4"><div class="text-muted" style="font-size:.72rem">今日最高</div>
+          <div class="num up">${d.high!=null?Number(d.high).toFixed(3):'-'}</div></div>
+        <div class="col-4"><div class="text-muted" style="font-size:.72rem">今日最低</div>
+          <div class="num down">${d.low!=null?Number(d.low).toFixed(3):'-'}</div></div>
+        <div class="col-4"><div class="text-muted" style="font-size:.72rem">昨收</div>
+          <div class="num">${d.prev_close!=null?Number(d.prev_close).toFixed(3):'-'}</div></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderResultList(data){
+  const rows=data.map(d=>{
+    const cls=pctClass(d.change_pct);
+    return `<tr>
+      <td class="num" style="font-size:.78rem;color:var(--text3)">${d.code}</td>
+      <td><span class="fw-semibold" style="font-size:.88rem">${d.name||d.code}</span></td>
+      <td class="text-end num fw-bold ${cls}">${d.price!=null?Number(d.price).toFixed(3):'-'}</td>
+      <td class="text-end"><span class="chg-badge ${cls}">${fmtPct(d.change_pct)}</span></td>
+      <td class="text-end num" style="font-size:.8rem;color:var(--text2)">${fmtAmt(d.amount)}</td>
+      <td class="text-end num up" style="font-size:.78rem">${d.high!=null?Number(d.high).toFixed(3):'-'}</td>
+      <td class="text-end num down" style="font-size:.78rem">${d.low!=null?Number(d.low).toFixed(3):'-'}</td>
+      <td class="text-center">${addBtn(d.code,d.name||d.code)}</td>
+    </tr>`;
+  }).join('');
+  return `<div class="result-panel">
+    <div style="padding:8px 12px 6px;font-size:.72rem;color:var(--text3);border-bottom:1px solid var(--border)">
+      共 ${data.length} 条匹配结果
+    </div>
+    <div class="table-responsive">
+      <table class="data-table" style="font-size:.84rem">
+        <thead><tr>
+          <th>代码</th><th>名称</th>
+          <th class="text-end">最新价</th><th class="text-end">涨跌幅</th>
+          <th class="text-end">成交额</th><th class="text-end">最高</th><th class="text-end">最低</th>
+          <th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function clearSearch(){
+  document.getElementById('search-input').value='';
+  document.getElementById('search-result').innerHTML='';
+}
+function doSearch(){
+  const q=document.getElementById('search-input').value.trim();
+  if(!q)return;
+  const el=document.getElementById('search-result');
+  el.innerHTML='<span class="text-muted small">查询中...</span>';
+  fetch(`/api/stocks/etf/search?q=${encodeURIComponent(q)}`).then(r=>r.json()).then(data=>{
+    const valid=data.filter(d=>!d.error);
+    if(!valid.length){el.innerHTML='<div class="text-muted small py-2">未找到该 ETF</div>';return;}
+    el.innerHTML = valid.length===1 ? renderDetailCard(valid[0]) : renderResultList(valid);
+  });
+}
+</script>
+{% endblock %}

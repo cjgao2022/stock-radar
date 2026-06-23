@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+akshare
+requests
+pyyaml
+python-dotenv
+apscheduler
+jinja2

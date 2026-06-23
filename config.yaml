@@ -1,0 +1,51 @@
+indices:
+  - code: "sh000001"
+    name: "上证指数"
+  - code: "sz399001"
+    name: "深证成指"
+  - code: "sz399006"
+    name: "创业板指"
+  - code: "sh000688"
+    name: "科创50"
+  - code: "sh000300"
+    name: "沪深300"
+  - code: "sh000016"
+    name: "上证50"
+
+etf_watchlist:
+  - code: "510300"
+    name: "沪深300ETF"
+    type: "宽基"
+  - code: "510050"
+    name: "上证50ETF"
+    type: "宽基"
+  - code: "159919"
+    name: "300ETF"
+    type: "宽基"
+  - code: "159915"
+    name: "创业板ETF"
+    type: "宽基"
+  - code: "588000"
+    name: "科创50ETF"
+    type: "宽基"
+  - code: "513100"
+    name: "纳指ETF"
+    type: "跨境"
+
+watchlist:
+  - code: "600519"
+    name: "贵州茅台"
+  - code: "300750"
+    name: "宁德时代"
+  - code: "000858"
+    name: "五粮液"
+
+cache:
+  board_ttl_minutes: 5
+  flow_ttl_minutes: 5
+  snapshot_refresh_time: "16:35"
+  db_path: "db/snapshot.db"
+
+server:
+  host: "127.0.0.1"
+  port: 8000

@@ -1,0 +1,9 @@
+.env
+db/
+__pycache__/
+*.pyc
+.python-version
+data/watchlist.json
+.claude/
+chrome_profile/
+downloads/
