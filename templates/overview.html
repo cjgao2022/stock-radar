@@ -31,25 +31,6 @@
   .ratio-bar .flat-seg { background: rgba(255,255,255,.2); }
   .ratio-bar .down-seg { background: var(--down); }
 
-  /* 北向资金卡 */
-  .north-card {
-    background: linear-gradient(135deg, #0d1a2e 0%, #142038 100%);
-    border: 1px solid rgba(61,126,252,.2);
-    border-radius: 10px;
-    padding: 12px 14px;
-  }
-  .north-card-total { background: linear-gradient(135deg, #0d1a2e 0%, #162540 100%); }
-  .north-card .nc-label { font-size: .7rem; color: rgba(255,255,255,.35); letter-spacing: .5px; }
-  .north-card .nc-val   { font-size: 1.4rem; font-weight: 800; font-variant-numeric: tabular-nums; }
-  .north-card .nc-ud    { display:flex; gap:10px; margin-top:6px; }
-  .north-card .nc-ud-item { display:flex; align-items:baseline; gap:4px; }
-  .north-card .nc-ud-label { font-size:.95rem; font-weight:700; line-height:1; }
-  .north-card .nc-ud-num   { font-size:1.15rem; font-weight:800; font-variant-numeric:tabular-nums; line-height:1; }
-  .north-card .nc-ud-item.up-item   .nc-ud-label { color:#f08090; }
-  .north-card .nc-ud-item.up-item   .nc-ud-num   { color:#f08090; }
-  .north-card .nc-ud-item.down-item .nc-ud-label { color:#56c98e; }
-  .north-card .nc-ud-item.down-item .nc-ud-num   { color:#56c98e; }
-
   /* 热力图切换按钮 */
   .hm-btn {
     padding: 3px 12px; border-radius: 5px; font-size: .75rem; cursor: pointer;
@@ -109,19 +90,7 @@
   [data-theme="light"] #b-dt-real { color: var(--down) !important; opacity: .55; }
   [data-theme="light"] .ratio-bar .flat-seg { background: var(--border2); }
 
-  [data-theme="light"] .north-card,
-  [data-theme="light"] .north-card-total {
-    background: #f0f5ff;
-    border-color: rgba(61,126,252,.2);
-  }
-  [data-theme="light"] .north-card .nc-label { color: var(--text3); }
-  [data-theme="light"] .north-card .nc-val   { color: var(--text1); }
-  [data-theme="light"] .north-card .nc-ud-item.up-item   .nc-ud-label,
-  [data-theme="light"] .north-card .nc-ud-item.up-item   .nc-ud-num   { color: var(--up); }
-  [data-theme="light"] .north-card .nc-ud-item.down-item .nc-ud-label,
-  [data-theme="light"] .north-card .nc-ud-item.down-item .nc-ud-num   { color: var(--down); }
-
-  [data-theme="light"] .panel-dark-body { background: transparent; }
+[data-theme="light"] .panel-dark-body { background: transparent; }
   [data-theme="light"] .dt-dark { color: var(--text1); }
   [data-theme="light"] .dt-dark thead th {
     background: var(--thead-bg); color: var(--text2);
@@ -217,43 +186,10 @@
   </div>
 
   <div class="col-lg-4 d-flex flex-column gap-3">
-    <!-- 北向资金 -->
-    <div class="panel">
-      <div class="panel-hd">
-        <div class="hd-title"><div class="accent-bar"></div>北向资金（沪深港通）</div>
-      </div>
-      <div class="panel-body">
-        <div class="row g-2" id="north-cards">
-          <div class="col-6">
-            <div class="north-card">
-              <div class="nc-label">沪股通净买入</div>
-              <div class="nc-val" id="n-sh">--</div>
-              <div class="nc-ud" id="n-sh-ud"></div>
-            </div>
-          </div>
-          <div class="col-6">
-            <div class="north-card">
-              <div class="nc-label">深股通净买入</div>
-              <div class="nc-val" id="n-sz">--</div>
-              <div class="nc-ud" id="n-sz-ud"></div>
-            </div>
-          </div>
-          <div class="col-12">
-            <div class="north-card north-card-total">
-              <div class="d-flex justify-content-between align-items-center">
-                <div class="nc-label">合计北向净流入</div>
-                <div class="nc-val" id="n-total">--</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- 行业资金流 -->
     <div class="panel flex-grow-1">
       <div class="panel-hd">
-        <div class="hd-title"><div class="accent-bar"></div>行业资金净流入 TOP8</div>
+        <div class="hd-title"><div class="accent-bar"></div>行业资金净流入 TOP10</div>
       </div>
       <div class="panel-body-flush panel-dark-body">
         <table class="data-table dt-dark" id="flow-table">
@@ -268,7 +204,7 @@
 <!-- ④ 连板梯队 + 龙虎榜 -->
 <div class="row g-3 mb-3">
   <!-- 涨停板 & 连板梯队 -->
-  <div class="col-lg-7">
+  <div class="col-lg-6">
     <div class="panel d-flex flex-column" style="height:480px">
       <div class="panel-hd flex-shrink-0">
         <div class="hd-title"><div class="accent-bar"></div>今日涨停板</div>
@@ -296,7 +232,7 @@
   </div>
 
   <!-- 龙虎榜 -->
-  <div class="col-lg-5">
+  <div class="col-lg-6">
     <div class="panel d-flex flex-column" style="height:480px">
       <div class="panel-hd flex-shrink-0">
         <div class="hd-title"><div class="accent-bar"></div>今日龙虎榜</div>
@@ -306,11 +242,11 @@
         <table class="data-table dt-dark" id="lhb-table">
           <thead style="position:sticky;top:0;z-index:1">
             <tr>
-              <th>名称</th><th class="text-end">涨跌幅</th>
-              <th class="text-end">净买额</th><th>上榜原因</th>
+              <th>代码</th><th>名称</th><th class="text-end">涨跌幅</th>
+              <th class="text-end">净买额</th><th class="text-end">换手率</th><th class="text-end">流通市值</th>
             </tr>
           </thead>
-          <tbody><tr><td colspan="4" class="text-center text-muted py-3">加载中...</td></tr></tbody>
+          <tbody><tr><td colspan="6" class="text-center text-muted py-3">加载中...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -371,8 +307,11 @@ fetch('/api/market/breadth').then(r=>r.json()).then(d=>{
       `<div class="up-seg" style="width:${upW}%"></div>
        <div class="flat-seg" style="width:${Math.max(flW,1)}%"></div>
        <div class="down-seg" style="width:${dnW}%"></div>`;
-    document.getElementById('ratio-up-pct').textContent  = `涨 ${upW}%`;
-    document.getElementById('ratio-down-pct').textContent = `跌 ${dnW}%`;
+    // 标签用 up+dn 为分母，保证涨跌两个百分比之和为 100%
+    const movers = up + dn;
+    const upPct = movers > 0 ? Math.round(up / movers * 100) : 50;
+    document.getElementById('ratio-up-pct').textContent  = `涨 ${upPct}%`;
+    document.getElementById('ratio-down-pct').textContent = `跌 ${100 - upPct}%`;
   }
 });
 
@@ -410,7 +349,7 @@ function loadHeatmap(type){
       tooltip:{
         backgroundColor:'rgba(13,21,38,.92)',borderColor:'rgba(255,255,255,.1)',
         textStyle:{color:'#e0e8f8',fontSize:12},
-        formatter:p=>`<b>${p.data.name}</b><br>涨跌幅: <span style="color:${p.data.value>0?'#f67280':'#56c98e'}">${fmtPct(p.data.value)}</span>`
+        formatter:p=>`<b>${p.data.name}</b><br>涨跌幅: <span style="color:${p.data.rawValue>=0?'#f67280':'#56c98e'}">${fmtPct(p.data.rawValue)}</span>`
       },
       series:[{
         type:'treemap',roam:false,nodeClick:false,cursor:'pointer',
@@ -418,16 +357,16 @@ function loadHeatmap(type){
         left:0,right:0,top:0,bottom:0,
         squareRatio:1,
         itemStyle:{borderWidth:1,borderColor:'#1a2845',gapWidth:1},
+        label:{
+          position:'inside',
+          align:'center',verticalAlign:'middle',
+          color:'rgba(255,255,255,.92)',
+          fontSize:11,fontWeight:600,lineHeight:18,
+          formatter:p=>`${p.data.name}\n${fmtPct(p.data.rawValue)}`
+        },
         data:rows.map(d=>({
-          name:d.name,value:Math.abs(d.mkt_cap)||1,rawValue:d.change_pct,
-          itemStyle:{color:pctColor(d.change_pct)},
-          label:{
-            formatter:p=>`{a|${p.data.name}}\n{b|${fmtPct(p.data.rawValue)}}`,
-            rich:{
-              a:{color:'rgba(255,255,255,.9)',fontSize:11,fontWeight:600},
-              b:{color:'rgba(255,255,255,.75)',fontSize:11,fontFamily:'Roboto Mono,monospace'}
-            }
-          }
+          name:d.name,value:Math.abs(d.change_pct)||0.01,rawValue:d.change_pct,
+          itemStyle:{color:pctColor(d.change_pct)}
         }))
       }]
     });
@@ -441,25 +380,9 @@ function switchHeatmap(type){
 }
 loadHeatmap('concept');
 
-/* ── 北向资金 ── */
-fetch('/api/market/north').then(r=>r.json()).then(d=>{
-  if(d.error) return;
-  const shN=d.sh_net, szN=d.sz_net;
-  const total=(shN||0)+(szN||0);
-  const shCls=shN>=0?'up':'down', szCls=szN>=0?'up':'down', totCls=total>=0?'up':'down';
-  document.getElementById('n-sh').innerHTML = `<span class="${shCls} num">${fmtM(shN)}</span>`;
-  document.getElementById('n-sz').innerHTML = `<span class="${szCls} num">${fmtM(szN)}</span>`;
-  const udHtml = (up,dn) =>
-    `<div class="nc-ud-item up-item"><span class="nc-ud-label">↑</span><span class="nc-ud-num">${up||'--'}</span></div>` +
-    `<div class="nc-ud-item down-item"><span class="nc-ud-label">↓</span><span class="nc-ud-num">${dn||'--'}</span></div>`;
-  document.getElementById('n-sh-ud').innerHTML = udHtml(d.sh_up, d.sh_down);
-  document.getElementById('n-sz-ud').innerHTML = udHtml(d.sz_up, d.sz_down);
-  document.getElementById('n-total').innerHTML = `<span class="${totCls} num">${fmtM(total)}</span>`;
-});
-
 /* ── 行业资金流 ── */
 fetch('/api/flow/industry').then(r=>r.json()).then(data=>{
-  const rows=data.filter(d=>!d.error).slice(0,8);
+  const rows=data.filter(d=>!d.error).slice(0,10);
   const tbody=document.querySelector('#flow-table tbody');
   if(!rows.length){tbody.innerHTML='<tr><td colspan="3" class="text-muted text-center py-2">暂无数据</td></tr>';return;}
   tbody.innerHTML=rows.map(d=>`
@@ -522,16 +445,20 @@ loadZT();
 fetch('/api/market/lhb').then(r=>r.json()).then(data=>{
   const rows=data.filter(d=>!d.error).slice(0,15);
   const tbody=document.querySelector('#lhb-table tbody');
-  if(!rows.length){tbody.innerHTML='<tr><td colspan="4" class="text-center text-muted py-3">暂无数据</td></tr>';return;}
+  if(!rows.length){tbody.innerHTML='<tr><td colspan="6" class="text-center text-muted py-3">暂无数据</td></tr>';return;}
   tbody.innerHTML=rows.map(d=>{
     const cls=pctClass(d.change_pct);
     const nb=d.net_buy;
     const nbCls=nb>=0?'net-buy-pos':'net-buy-neg';
+    const mktCap=d.free_mkt_cap!=null?(d.free_mkt_cap/1e8).toFixed(0)+'亿':'-';
+    const turnover=d.turnover!=null?Number(d.turnover).toFixed(2)+'%':'-';
     return `<tr>
+      <td style="font-size:.8rem;color:var(--text2)">${d.code||'-'}</td>
       <td class="fw-semibold" style="font-size:.84rem">${d.name||'-'}</td>
       <td class="text-end"><span class="chg-badge ${cls}">${fmtPct(d.change_pct)}</span></td>
       <td class="text-end num ${nbCls}">${fmtM(nb)}</td>
-      <td><div class="lhb-reason" title="${d.reason||''}">${d.reason||'-'}</div></td>
+      <td class="text-end" style="font-size:.8rem;color:var(--text2)">${turnover}</td>
+      <td class="text-end" style="font-size:.8rem;color:var(--text2)">${mktCap}</td>
     </tr>`;
   }).join('');
 });

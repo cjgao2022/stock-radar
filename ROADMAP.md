@@ -15,6 +15,8 @@
 - [x] APScheduler 盘后自动刷新板块快照（16:35）
 - [x] 内存 TTL 缓存（5 分钟）+ SQLite 日快照持久化
 - [x] 全局 `threading.Lock`（`_AK_LOCK`）序列化 AKShare 调用，解决 py_mini_racer 并发崩溃
+- [x] `get_cached` 不缓存 error 响应，避免错误结果污染内存缓存
+- [x] 板块路由跳过含 error 的 SQLite 日快照，回退到实时拉取
 
 ### 数据源
 - [x] 新浪 `hq.sinajs.cn` 实时行情（指数、个股、ETF）
@@ -22,17 +24,31 @@
 - [x] AKShare `stock_fund_flow_concept(symbol='即时')`（THS 概念资金流，含领涨股）
 - [x] AKShare `stock_board_industry_summary_ths()`（THS 行业板块汇总，含上涨/下跌家数）
 - [x] AKShare `stock_zt_pool_em`（东方财富涨停板，含连板数）
-- [x] AKShare `stock_hot_rank_em`（东方财富热门排行）
-- [x] AKShare `stock_market_activity_legu`（全市场涨跌家数、涨停/跌停统计）
-- [x] AKShare `stock_hsgt_fund_flow_summary_em`（沪深港通北向资金）
-- [x] AKShare `stock_lhb_detail_em`（今日龙虎榜）
+- [x] AKShare `stock_lhb_detail_em(start_date, end_date)`（今日龙虎榜，必须传日期参数，默认参数为 2023 年旧数据）
+- [x] AKShare `stock_zh_a_spot()`（新浪全量行情，用于市场情绪涨跌家数统计，耗时约 20 秒）
+
+### 市场情绪
+- [x] 按板块使用正确涨跌停阈值：科创/创业板 ±20%，北交所 ±30%，ST ±5%，主板 ±10%
+- [x] 过滤停牌股（成交量 = 0），避免误计为平盘
+- [x] 活跃度字段（(涨+跌)/total × 100%）
+- [x] 涨% / 跌% 标签使用 up/(up+dn) 计算，确保两者相加为 100%
 
 ### 页面功能
-- [x] **大盘首页**：市场情绪条、指数卡片、板块热力图、北向资金、行业资金流 TOP8、连板梯队、龙虎榜、THS 热门 TOP20
+- [x] **大盘首页**：市场情绪条、指数卡片、板块热力图、行业资金流 TOP10、连板梯队、龙虎榜
+- [x] **板块热力图**：色块大小按涨跌幅绝对值排列，tooltip 正确显示涨跌幅（修正了 value/rawValue 混用 bug）
 - [x] **板块页**：概念/行业双 Tab，涨跌幅 + 领涨股，净流入列，可排序
+- [x] **板块详情**：K 线图支持 30/90/180/365 日切换（路由支持 `?days=` 参数，各档独立缓存）
 - [x] **板块详情**：构成股行情表（网络可达时展示，EM 接口被封时提示切换网络）
 - [x] **个股页**：持仓列表（统计卡 + 全宽表格）+ 名称/代码模糊搜索（多结果展示）
 - [x] **ETF 页**：持仓列表（统计卡 + 全宽表格）+ 名称/代码模糊搜索（多结果展示）
+- [x] **个股/ETF K线弹框**：持仓列表行内 K线按钮，点击弹出 ECharts 图；支持分时/日K/月K/年K 四档切换；数据源：新浪 `CN_MarketDataService.getKLineData`（scale=1/240），月K/年K 由 Python pandas resample 日线合成；分时仅展示最新交易日 09:30–15:00 窗口；`base.html` 全局共用弹框
+- [x] **首页布局**：今日涨停板 / 今日龙虎榜各占横向 50%（col-lg-6）
+- [x] **板块热力图**：名称与涨跌幅水平 + 垂直居中（`position:'inside'` + 纯文本，放弃 rich text 绕过 ECharts treemap verticalAlign 失效问题）
+
+### 龙虎榜
+- [x] 传今日日期参数（不传则取 AKShare 硬编码的 2023 年旧数据）
+- [x] 同一股票多条上榜原因合并展示（` / ` 分隔），并按代码去重
+- [x] 展示字段：代码、名称、涨跌幅、净买额、换手率、流通市值
 
 ### 持仓管理
 - [x] 动态持仓存储（`data/watchlist.json`，首次自动从 config.yaml 迁移）
@@ -56,18 +72,27 @@
 
 ---
 
-## 已知问题 / 待确认
+## 已移除功能
+
+| 功能 | 原因 |
+|------|------|
+| 北向资金（沪深港通） | 东方财富 `成交净买额` 数据自 2024-08 起全部断档（NaN/null），AKShare 所有 hsgt 接口均受影响，无可用替代数据源 |
+
+---
+
+## 已知问题
 
 | 问题 | 状态 |
 |------|------|
-| 北向资金 `成交净买额` 盘中返回 0.0 | 待确认（可能是 AKShare 数据延迟） |
-| 东方财富 `stock_board_concept_name_em` / `stock_board_industry_name_em` 在当前网络被封 | 已用 THS 接口替代，板块构成股接口同样被封，提示用户切换网络 |
+| 东方财富 `push2.eastmoney.com` 在当前网络被代理封锁 | 板块构成股接口受影响，提示用户切换网络；板块 K 线已改用 THS 接口规避；个股/ETF K 线已改用新浪 `CN_MarketDataService` 接口规避 |
 | 概念板块无上涨/下跌家数 | THS 概念接口不提供该字段，显示 `-`，属接口限制 |
+| 板块 K 线仅有日 K | THS 接口无 period 参数，东财月K接口走 push2 被封；当前以拉取日数据（最多365日）代替 |
 
 ---
 
 ## 待办
 
+- [ ] 板块月K/年K（Python 侧对日K聚合 resample，与个股月K/年K 同方案）
 - [ ] 个股主力资金净流入排行（大单追踪）
 - [ ] ETF 规模/折溢价率（需补充数据源）
 - [ ] 板块详情页增加资金流向趋势图（近5日）

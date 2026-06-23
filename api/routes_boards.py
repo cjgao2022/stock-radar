@@ -22,7 +22,7 @@ def api_board_list(board_type: str = "concept", sort: str = "change_pct", order:
     date = _today()
     # 优先读 SQLite 日快照，无快照再实时拉
     rows = load_board_snapshot(date, board_type)
-    if not rows:
+    if not rows or "error" in rows[0]:
         rows = get_cached(f"board_{board_type}", _TTL, lambda: fetch_board_list(board_type))
 
     reverse = order == "desc"
@@ -34,10 +34,10 @@ def api_board_list(board_type: str = "concept", sort: str = "change_pct", order:
 
 
 @router.get("/{board_type}/{board_name}/kline")
-def api_board_kline(board_type: str, board_name: str):
+def api_board_kline(board_type: str, board_name: str, days: int = 30):
     date = _today()
-    return get_cached(f"kline_{board_type}_{board_name}_{date}", _TTL,
-                      lambda: fetch_board_kline(board_type, board_name))
+    return get_cached(f"kline_{board_type}_{board_name}_{days}_{date}", _TTL,
+                      lambda: fetch_board_kline(board_type, board_name, days))
 
 
 @router.get("/{board_type}/{board_name}/constituents")

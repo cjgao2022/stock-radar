@@ -1,5 +1,6 @@
 """个股实时行情 —— 新浪 hq.sinajs.cn batch（100 个/次）"""
 
+import json
 import re
 import requests
 from pathlib import Path
@@ -194,3 +195,74 @@ def search_etf(query: str) -> list[dict]:
         if q["code"] in name_map:
             q["name"] = name_map[q["code"]]
     return quotes
+
+
+_SINA_KLINE_URL = (
+    "https://quotes.sina.cn/cn/api/jsonp_v2.php/var%20_x="
+    "/CN_MarketDataService.getKLineData"
+)
+_KLINE_SCALE = {"intraday": (1, 300), "daily": (240, 250), "monthly": (240, 1500), "yearly": (240, 1800)}
+
+
+def fetch_stock_kline(code: str, period: str) -> dict:
+    """新浪 K线接口，period: intraday | daily | monthly | yearly"""
+    symbol = f"{_sina_prefix(code)}{code}"
+    scale, datalen = _KLINE_SCALE.get(period, (240, 250))
+    s = requests.Session()
+    s.trust_env = False
+    try:
+        r = s.get(
+            f"{_SINA_KLINE_URL}?symbol={symbol}&scale={scale}&ma=no&datalen={datalen}",
+            headers={**_HEADERS, "User-Agent": "Mozilla/5.0"},
+            timeout=12,
+        )
+        m = re.search(r'\(\[(.*?)\]\)', r.text, re.DOTALL)
+        if not m:
+            return {"error": "no data"}
+        items = json.loads("[" + m.group(1) + "]")
+    except Exception as e:
+        return {"error": str(e)}
+
+    if not items:
+        return {"error": "empty"}
+
+    if period == "intraday":
+        # 取最新交易日日期，过滤到当日 09:30-15:00 窗口
+        latest_date = max(d["day"][:10] for d in items)
+        filtered = [
+            {"t": d["day"][11:16], "c": float(d["close"]), "v": int(float(d.get("volume") or 0))}
+            for d in items
+            if d["day"][:10] == latest_date and "09:30" <= d["day"][11:16] <= "15:00"
+        ]
+        return {"type": "line", "data": filtered, "date": latest_date}
+
+    if period in ("monthly", "yearly"):
+        import pandas as pd
+        df = pd.DataFrame(items)
+        df["day"] = pd.to_datetime(df["day"])
+        for col in ("open", "high", "low", "close"):
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+        df["volume"] = pd.to_numeric(df.get("volume", pd.Series([0] * len(df))), errors="coerce").fillna(0)
+        df = df.set_index("day")
+        freq = "ME" if period == "monthly" else "YE"
+        try:
+            agg = df.resample(freq).agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}).dropna()
+        except ValueError:
+            freq = "M" if period == "monthly" else "Y"
+            agg = df.resample(freq).agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}).dropna()
+        fmt = "%Y-%m" if period == "monthly" else "%Y"
+        return {
+            "type": "kline",
+            "data": [{"d": dt.strftime(fmt), "o": round(float(row["open"]), 2),
+                      "h": round(float(row["high"]), 2), "l": round(float(row["low"]), 2),
+                      "c": round(float(row["close"]), 2), "v": int(float(row["volume"]))}
+                     for dt, row in agg.iterrows()],
+        }
+
+    # daily
+    return {
+        "type": "kline",
+        "data": [{"d": d["day"][:10], "o": float(d["open"]), "h": float(d["high"]),
+                  "l": float(d["low"]), "c": float(d["close"]),
+                  "v": int(float(d.get("volume") or 0))} for d in items],
+    }

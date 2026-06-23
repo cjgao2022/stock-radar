@@ -18,7 +18,8 @@ def get_cached(key: str, ttl_seconds: int, fetch_fn: Callable) -> Any:
     if key in _mem and _mem[key][1] > now:
         return _mem[key][0]
     data = fetch_fn()
-    _mem[key] = (data, now + ttl_seconds)
+    if not (isinstance(data, list) and data and "error" in data[0]):
+        _mem[key] = (data, now + ttl_seconds)
     return data
 
 

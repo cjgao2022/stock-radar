@@ -4,7 +4,7 @@ from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter
 from data.fetchers.indices import fetch_indices
 from data.fetchers.flow import fetch_market_flow, fetch_zt_pool, fetch_industry_flow
-from data.fetchers.market import fetch_market_breadth, fetch_north_flow, fetch_lhb_today
+from data.fetchers.market import fetch_market_breadth, fetch_lhb_today
 from data.cache import get_cached, load_board_snapshot
 import yaml
 from pathlib import Path
@@ -44,11 +44,6 @@ def api_zt():
 @router.get("/api/market/breadth")
 def api_market_breadth():
     return get_cached("market_breadth", 300, fetch_market_breadth)  # 全量拉取耗时~20s，5分钟缓存
-
-
-@router.get("/api/market/north")
-def api_north_flow():
-    return get_cached("north_flow", 60, fetch_north_flow)
 
 
 @router.get("/api/market/lhb")

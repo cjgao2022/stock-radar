@@ -1,11 +1,14 @@
 """个股相关 API"""
 
+from datetime import date as _date
 from fastapi import APIRouter
-from data.fetchers.stocks import fetch_watchlist, fetch_etf_watchlist, search_stock, search_etf
+from data.fetchers.stocks import fetch_watchlist, fetch_etf_watchlist, search_stock, search_etf, fetch_stock_kline
 from data.fetchers.flow import fetch_stock_flow
 from data.watchlist_store import add_stock, remove_stock, add_etf, remove_etf
+from data.cache import get_cached
 
 router = APIRouter(prefix="/api/stocks")
+_KLINE_TTL = {"intraday": 60, "daily": 300, "monthly": 3600, "yearly": 3600}
 
 
 @router.get("/watchlist")
@@ -46,6 +49,20 @@ def api_remove_etf(code: str):
 @router.get("/etf/search")
 def api_etf_search(q: str = ""):
     return search_etf(q)
+
+
+@router.get("/etf/{code}/kline")
+def api_etf_kline(code: str, period: str = "daily"):
+    ttl = _KLINE_TTL.get(period, 300)
+    key = f"kline_etf_{code}_{period}" + ("" if period == "intraday" else f"_{_date.today()}")
+    return get_cached(key, ttl, lambda: fetch_stock_kline(code, period))
+
+
+@router.get("/{code}/kline")
+def api_stock_kline(code: str, period: str = "daily"):
+    ttl = _KLINE_TTL.get(period, 300)
+    key = f"kline_{code}_{period}" + ("" if period == "intraday" else f"_{_date.today()}")
+    return get_cached(key, ttl, lambda: fetch_stock_kline(code, period))
 
 
 @router.get("/{code}/flow")

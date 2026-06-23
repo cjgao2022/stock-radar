@@ -206,7 +206,8 @@ function stockRow(d){
       </div>
     </td>
     <td class="text-center num" style="font-size:.72rem;color:var(--text3);white-space:nowrap">${d.added_at||'-'}</td>
-    <td class="text-center">
+    <td class="text-center" style="white-space:nowrap">
+      <button class="btn-kline" onclick="openKlineModal('${d.code}','${escQ(d.name||d.code)}',false)" title="K线">K线</button>
       <button class="btn-rm" onclick="removeStock('${d.code}',this)" title="移除持仓">×</button>
     </td>
   </tr>`;
