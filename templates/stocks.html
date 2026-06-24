@@ -129,12 +129,15 @@
           <th class="text-center">日内区间</th>
           <th class="text-end sortable" onclick="sortBy('amount')">成交额</th>
           <th class="text-center sortable" onclick="sortBy('vol_ratio')" title="今日量/20日均量">量比</th>
+          <th class="text-end sortable" onclick="sortBy('pe')" title="静态市盈率=最新价÷年报EPS">PE</th>
+          <th class="text-end sortable" onclick="sortBy('pb')" title="市净率=最新价÷最新每股净资产">PB</th>
+          <th class="text-end sortable" onclick="sortBy('roe')" title="最新季报净资产收益率">ROE</th>
           <th class="text-end sortable" onclick="sortBy('pnl_pct')" title="持仓盈亏（需设成本价）">持仓盈亏</th>
           <th style="width:72px"></th>
         </tr>
       </thead>
       <tbody id="stock-tbody">
-        <tr><td colspan="10" class="text-center text-muted py-4">加载中...</td></tr>
+        <tr><td colspan="13" class="text-center text-muted py-4">加载中...</td></tr>
       </tbody>
     </table>
   </div>
@@ -224,6 +227,7 @@
 <script>
 let allData=[], maxAmount=1, watchlistCodes=new Set();
 let volStats={};       // {code: {ratio, avg_vol}}
+let fundData={};       // {code: {eps, bvps, roe, profit_yoy}}
 let flowData=[];       // 主力资金数据
 let sortState={key:'change_pct', desc:true};
 let flowSortState={key:'main_net', desc:true};
@@ -356,6 +360,18 @@ function stockRow(d){
     pnlHtml=`<span class="pnl-na" onclick="openCostEditor('${d.code}','${escQ(d.name||d.code)}',null,null)">设成本</span>`;
   }
 
+  // PE / PB / ROE
+  const f=fundData[d.code]||{};
+  const peVal=(f.eps&&d.price)?d.price/f.eps:null;
+  const pbVal=(f.bvps&&d.price)?d.price/f.bvps:null;
+  const roeVal=f.roe??null;
+  const peColor=peVal!=null?(peVal<0||peVal>50?'#f5a623':'var(--text1)'):'var(--text3)';
+  const pbColor=pbVal!=null?(pbVal<1?'var(--down)':pbVal>5?'#f5a623':'var(--text1)'):'var(--text3)';
+  const roeColor=roeVal!=null?(roeVal<0?'var(--up)':roeVal>=15?'var(--down)':'var(--text1)'):'var(--text3)';
+  const peHtml=peVal!=null?`<span class="num" style="font-size:.8rem;color:${peColor}">${peVal.toFixed(1)}x</span>`:`<span style="color:var(--text3);font-size:.72rem">--</span>`;
+  const pbHtml=pbVal!=null?`<span class="num" style="font-size:.8rem;color:${pbColor}">${pbVal.toFixed(2)}x</span>`:`<span style="color:var(--text3);font-size:.72rem">--</span>`;
+  const roeHtml=roeVal!=null?`<span class="num" style="font-size:.8rem;color:${roeColor}">${roeVal.toFixed(1)}%</span>`:`<span style="color:var(--text3);font-size:.72rem">--</span>`;
+
   return `<tr class="${rowCls}">
     <td class="num" style="font-size:.78rem;color:var(--text3)">${d.code||'-'}</td>
     <td><span class="fw-bold" style="font-size:.9rem">${d.name||d.code}</span></td>
@@ -371,6 +387,9 @@ function stockRow(d){
     </td>
     <td class="text-end num" style="font-size:.82rem;color:var(--text2)">${fmtAmt(d.amount)}</td>
     <td class="text-center">${volRatioHtml}</td>
+    <td class="text-end">${peHtml}</td>
+    <td class="text-end">${pbHtml}</td>
+    <td class="text-end">${roeHtml}</td>
     <td class="text-end">${pnlHtml}</td>
     <td class="text-center" style="white-space:nowrap">
       <button class="btn-kline" onclick="openKlineModal('${d.code}','${escQ(d.name||d.code)}',false)" title="K线">K线</button>
@@ -389,6 +408,9 @@ function getSortVal(d,key){
   if(key==='change_abs')return d.price!=null&&d.prev_close!=null?d.price-d.prev_close:-Infinity;
   if(key==='vol_ratio')return volStats[d.code]?.ratio??-1;
   if(key==='pnl_pct'){const p=calcPnl(d);return p!=null?p.pct:-Infinity;}
+  if(key==='pe'){const f=fundData[d.code];return(f?.eps&&d.price)?d.price/f.eps:Infinity;}
+  if(key==='pb'){const f=fundData[d.code];return(f?.bvps&&d.price)?d.price/f.bvps:Infinity;}
+  if(key==='roe')return fundData[d.code]?.roe??-Infinity;
   return d[key]??-Infinity;
 }
 function filterRows(){ renderTable(); }
@@ -398,7 +420,7 @@ function renderTable(){
   rows.sort((a,b)=>{const av=getSortVal(a,sortState.key),bv=getSortVal(b,sortState.key);return sortState.desc?bv-av:av-bv;});
   document.getElementById('stock-tbody').innerHTML=rows.length
     ?rows.map(stockRow).join('')
-    :'<tr><td colspan="10" class="text-center text-muted py-3">无匹配数据</td></tr>';
+    :'<tr><td colspan="13" class="text-center text-muted py-3">无匹配数据</td></tr>';
 }
 
 function updateStats(data){
@@ -447,12 +469,24 @@ function loadStocks(){
     maxAmount=Math.max(...allData.map(d=>d.amount||0),1);
     updateStats(allData);renderTable();
     document.getElementById('refresh-hint').textContent=`更新于 ${now()}`;
+    loadFundamentals();
   }).catch(()=>{
-    document.getElementById('stock-tbody').innerHTML='<tr><td colspan="10" class="text-center text-danger py-3">加载失败，请刷新</td></tr>';
+    document.getElementById('stock-tbody').innerHTML='<tr><td colspan="13" class="text-center text-danger py-3">加载失败，请刷新</td></tr>';
   });
 }
 loadStocks();
 setInterval(loadStocks,60000);
+
+/* ── 基本面数据（PE/PB/ROE，6小时缓存，异步不阻塞主表） ── */
+function loadFundamentals(){
+  const codes=allData.map(d=>d.code).join(',');
+  if(!codes)return;
+  fetch(`/api/stocks/fundamentals?codes=${codes}`).then(r=>r.json()).then(data=>{
+    fundData=data||{};
+    renderTable();
+  }).catch(()=>{});
+}
+setInterval(loadFundamentals,3600000);
 
 /* ── 量比加载（异步，不阻塞主表） ── */
 function loadVolStats(){

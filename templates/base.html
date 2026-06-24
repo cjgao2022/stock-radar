@@ -386,10 +386,14 @@
     <span>STOCK RADAR</span>
   </a>
   <div class="nav-links">
-    <a href="/"       id="nav-overview">大盘</a>
-    <a href="/boards" id="nav-boards">板块</a>
-    <a href="/stocks" id="nav-stocks">个股</a>
-    <a href="/etf"    id="nav-etf">ETF</a>
+    <a href="/"          id="nav-overview">大盘</a>
+    <a href="/boards"    id="nav-boards">板块</a>
+    <a href="/stocks"    id="nav-stocks">个股</a>
+    <a href="/etf"       id="nav-etf">ETF</a>
+    <a href="/valuation" id="nav-valuation">估值</a>
+    <a href="/macro"     id="nav-macro">宏观</a>
+    <a href="/news"      id="nav-news">资讯</a>
+    <a href="/leaders"   id="nav-leaders">龙头</a>
   </div>
   <div class="market-status">
     <button class="theme-btn" id="theme-btn" title="切换主题" onclick="toggleTheme()">🌙</button>
@@ -468,7 +472,7 @@ function toggleTheme() {
 // ── 高亮当前导航 ──
 (function() {
   const path = location.pathname;
-  const map = { '/': 'nav-overview', '/boards': 'nav-boards', '/stocks': 'nav-stocks', '/etf': 'nav-etf' };
+  const map = { '/': 'nav-overview', '/boards': 'nav-boards', '/stocks': 'nav-stocks', '/etf': 'nav-etf', '/valuation': 'nav-valuation', '/macro': 'nav-macro', '/news': 'nav-news', '/leaders': 'nav-leaders' };
   const key = Object.keys(map).find(k => k !== '/' ? path.startsWith(k) : path === '/');
   if (key) document.getElementById(map[key])?.classList.add('active');
 })();
@@ -477,7 +481,7 @@ function toggleTheme() {
 function updateClock() {
   const now = new Date();
   document.getElementById('market-time').textContent =
-    now.toLocaleTimeString('zh-CN', { hour12: false, timeZone: 'Asia/Shanghai' });
+    now.toLocaleString('sv-SE', { timeZone: 'Asia/Shanghai' });
   const h = now.getHours(), m = now.getMinutes();
   const inSession = (h > 9 || (h === 9 && m >= 25)) && (h < 15 || (h === 15 && m === 0));
   const dot = document.getElementById('status-dot');

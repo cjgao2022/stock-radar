@@ -29,14 +29,18 @@ stock-radar/
 ├── api/
 │   ├── routes_overview.py # GET /api/indices /api/flow/* /api/market/* /api/zt
 │   ├── routes_boards.py   # GET /api/boards /api/boards/{type}/{name}/*
-│   └── routes_stocks.py   # GET/POST/DELETE /api/stocks/* /api/stocks/etf/* /api/stocks/{code}/kline
+│   ├── routes_stocks.py   # GET/POST/DELETE /api/stocks/* /api/stocks/etf/* /api/stocks/{code}/kline
+│   ├── routes_news.py     # GET /api/news/announcements /api/news/research
+│   └── routes_leaders.py  # GET /api/leaders
 └── templates/
-    ├── base.html          # Bootstrap 5 Navbar + 布局骨架 + 口令弹框 + K线弹框（全局，导航栏不展示指数行情）
+    ├── base.html          # Bootstrap 5 Navbar（时钟 yyyy-mm-dd hh:mm:ss）+ 布局骨架 + 口令弹框 + K线弹框（全局）
     ├── overview.html      # 首页：指数卡片 + 市场情绪面板（涨跌家数/成交额/近60日历史图）+ 热力图 + 资金 + 涨停 + 龙虎榜
     ├── boards.html        # 板块列表（概念/行业 Tab）
     ├── board_detail.html  # 板块详情 + K 线（30/90/180/365日切换）+ 构成股
     ├── stocks.html        # 个股持仓 + 搜索
-    └── etf.html           # ETF 持仓 + 搜索
+    ├── etf.html           # ETF 持仓 + 搜索
+    ├── news.html          # 公告（持仓股/全市场）+ 研究报告，分页10条/页
+    └── leaders.html       # 申万一级行业龙头（成交额 TOP5，支持排序）
 ```
 
 ## 数据源详细说明
@@ -176,6 +180,12 @@ stock-radar/
 | 板块构成股 | 东方财富 | `stock_board_concept/industry_cons_em()`（push2 易被封） |
 | 龙虎榜 | 东方财富 | `stock_lhb_detail_em(start_date, end_date)`（必传日期） |
 | 市场情绪（涨跌家数） | 新浪（via AKShare） | `stock_zh_a_spot()` |
+| A股公告（持仓股当日） | 东方财富 | `stock_individual_notice_report(security, symbol, begin_date, end_date)`；空结果时 AKShare 内部报 KeyError，已 try/except 兜底 |
+| A股公告（全市场当日） | 东方财富 | `stock_notice_report(symbol="全部", date)`；symbol 为公告类型非股票代码；全量约 1000-2000 条/天，5-15 秒，30 分钟缓存 |
+| 个股研报 | 东方财富 | `stock_research_report_em(symbol)`；返回字段：股票简称/报告名称/东财评级/机构/日期/报告PDF链接；无目标价 |
+| 申万一级行业成分 | 申万 | `sw_index_first_info()` 返回行业代码（格式 `801010.SI`，去掉 `.SI` 后传入 `index_stock_cons()`）；31 个一级行业映射 24h 模块缓存 |
+| 申万行业实时指数 | 申万 | `index_realtime_sw(symbol='一级行业')`；字段：指数代码/昨收盘/最新价，涨跌幅需 Python 自算 |
+| 全量 A 股成交额（行业龙头排名） | 新浪（via AKShare） | `stock_zh_a_spot()`；代码格式 `sh600519`，取后6位得纯数字代码；按成交额排名取各行业 TOP5 |
 
 ---
 
@@ -227,3 +237,5 @@ python -c "from data.fetchers.stocks import search_etf; import json; print(json.
 - 不添加未在计划中的功能（先跑通再扩展）
 - 新增数据源前先在「数据源详细说明」章节补充文档，再写代码
 - 调用 `stock_lhb_detail_em` 时必须传 `start_date` 和 `end_date`，禁止使用默认参数
+- 深色主题下 `<select>` 的 `<option>` 必须同时设 `[data-theme="dark"] option { background:#111827; color:#e0e8f0; }` 和 `color-scheme:dark`，否则 Windows Chrome 下选项不可见
+- 导航栏时钟格式：`now.toLocaleString('sv-SE', { timeZone:'Asia/Shanghai' })`，输出 `yyyy-mm-dd hh:mm:ss`

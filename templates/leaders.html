@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% block title %}行业龙头 - 股票雷达{% endblock %}
+
+{% block head %}
+<style>
+  /* 排序按钮 */
+  .sort-bar { display:flex; gap:6px; margin-bottom:14px; align-items:center; }
+  .sort-btn {
+    padding:4px 14px; border-radius:16px; font-size:.78rem; font-weight:600;
+    border:1.5px solid var(--border2); background:transparent; color:var(--text2);
+    cursor:pointer; transition:all .15s;
+  }
+  .sort-btn.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .sort-btn:hover:not(.active) { border-color:var(--accent); color:var(--accent); }
+
+  /* 行业卡片网格 */
+  .leaders-grid {
+    display:grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap:10px;
+  }
+
+  .ind-card {
+    background:var(--card-bg);
+    border:1px solid var(--border);
+    border-radius:10px;
+    overflow:hidden;
+    transition:border-color .15s;
+  }
+  .ind-card:hover { border-color:var(--border2); }
+
+  .ind-card-hd {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:9px 12px 8px;
+    border-bottom:1px solid var(--border);
+    background:linear-gradient(90deg, var(--dark3), var(--dark2));
+  }
+  .ind-name { font-size:.88rem; font-weight:700; color:var(--text1); }
+  .ind-chg  { font-size:.84rem; font-weight:700; font-variant-numeric:tabular-nums; }
+  .ind-chg.up   { color:var(--up); }
+  .ind-chg.down { color:var(--down); }
+  .ind-chg.flat { color:var(--text3); }
+
+  /* 卡片内表格 */
+  .ind-table { width:100%; border-collapse:collapse; font-size:.78rem; }
+  .ind-table tr + tr td { border-top:1px solid var(--border); }
+  .ind-table td { padding:5px 10px; }
+  .ind-table .td-code {
+    font-family:var(--num); color:var(--accent); cursor:pointer; white-space:nowrap;
+    font-size:.76rem;
+  }
+  .ind-table .td-code:hover { text-decoration:underline; }
+  .ind-table .td-name  { color:var(--text1); }
+  .ind-table .td-price { font-family:var(--num); text-align:right; white-space:nowrap; }
+  .ind-table .td-chg   { text-align:right; font-family:var(--num); font-weight:700; white-space:nowrap; }
+  .ind-table .td-amt   { text-align:right; font-family:var(--num); color:var(--text2); white-space:nowrap; }
+  .ind-table .up   { color:var(--up); }
+  .ind-table .down { color:var(--down); }
+  .ind-table .flat { color:var(--text3); }
+
+  .loading-mask {
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:60px 20px; gap:12px; color:var(--text2); font-size:.88rem;
+  }
+  .loading-spinner {
+    width:32px; height:32px; border:3px solid var(--border);
+    border-top-color:var(--accent); border-radius:50%;
+    animation:spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  [data-theme="light"] .ind-card-hd { background:#f7f9fc; border-bottom:1px solid var(--border); }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="panel mb-2">
+  <div class="panel-hd">
+    <div class="hd-title"><div class="accent-bar"></div>申万一级行业龙头（成交额 TOP5）</div>
+    <span id="leaders-hint" style="font-size:.72rem;color:rgba(255,255,255,.4)">加载中，首次约60秒，之后30分钟缓存</span>
+  </div>
+  <div class="panel-body" style="padding:10px 12px">
+
+    <div class="sort-bar">
+      <span style="font-size:.76rem;color:var(--text2)">排序：</span>
+      <button class="sort-btn active" id="sort-chg"    onclick="sortBy('chg')">行业涨跌幅</button>
+      <button class="sort-btn"        id="sort-amount" onclick="sortBy('amount')">成交额</button>
+      <button class="sort-btn"        id="sort-name"   onclick="sortBy('name')">行业名称</button>
+    </div>
+
+    <div id="leaders-container">
+      <div class="loading-mask">
+        <div class="loading-spinner"></div>
+        <span>正在加载行业龙头数据，首次约 60 秒，之后 30 分钟缓存...</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let _leadersData = [];
+let _sortKey = 'chg';
+
+function chgClass(v) {
+  if (v > 0) return 'up';
+  if (v < 0) return 'down';
+  return 'flat';
+}
+
+function chgText(v) {
+  if (v == null) return '—';
+  const s = v >= 0 ? '+' : '';
+  return `${s}${parseFloat(v).toFixed(2)}%`;
+}
+
+function sortBy(key) {
+  _sortKey = key;
+  document.querySelectorAll('.sort-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById(`sort-${key}`).classList.add('active');
+  renderLeaders(_leadersData);
+}
+
+function sortedData(data) {
+  const d = [...data];
+  if (_sortKey === 'chg')    d.sort((a, b) => b.chg_pct - a.chg_pct);
+  if (_sortKey === 'amount') d.sort((a, b) => {
+    const aAmt = (a.stocks || []).reduce((s, x) => s + (x.amount_yi || 0), 0);
+    const bAmt = (b.stocks || []).reduce((s, x) => s + (x.amount_yi || 0), 0);
+    return bAmt - aAmt;
+  });
+  if (_sortKey === 'name') d.sort((a, b) => a.industry_name.localeCompare(b.industry_name, 'zh'));
+  return d;
+}
+
+function renderLeaders(data) {
+  const container = document.getElementById('leaders-container');
+  if (!data || data.length === 0) {
+    container.innerHTML = '<div class="loading-mask"><span>暂无数据</span></div>';
+    return;
+  }
+
+  const sorted = sortedData(data);
+  const cards = sorted.map(ind => {
+    const chgCls = chgClass(ind.chg_pct);
+    const stocks = ind.stocks || [];
+    const rows = stocks.length
+      ? stocks.map(s => {
+          const sc = chgClass(s.chg_pct);
+          return `<tr>
+            <td class="td-code" onclick="openKline('${s.code}','${s.name}')">${s.code}</td>
+            <td class="td-name">${s.name}</td>
+            <td class="td-price ${sc}">${parseFloat(s.price || 0).toFixed(2)}</td>
+            <td class="td-chg  ${sc}">${chgText(s.chg_pct)}</td>
+            <td class="td-amt">${parseFloat(s.amount_yi || 0).toFixed(1)}亿</td>
+          </tr>`;
+        }).join('')
+      : `<tr><td colspan="5" style="color:var(--text3);padding:8px 10px;font-size:.76rem">暂无成交数据</td></tr>`;
+
+    return `<div class="ind-card">
+      <div class="ind-card-hd">
+        <span class="ind-name">${ind.industry_name}</span>
+        <span class="ind-chg ${chgCls}">${chgText(ind.chg_pct)}</span>
+      </div>
+      <table class="ind-table">
+        <colgroup>
+          <col style="width:58px">
+          <col>
+          <col style="width:56px">
+          <col style="width:62px">
+          <col style="width:56px">
+        </colgroup>
+        ${rows}
+      </table>
+    </div>`;
+  }).join('');
+
+  container.innerHTML = `<div class="leaders-grid">${cards}</div>`;
+}
+
+// ── K线弹框（复用 base.html 的全局弹框） ──────────────────────
+function openKline(code, name) {
+  if (typeof openKlineModal === 'function') {
+    openKlineModal(code, name);
+  }
+}
+
+// ── 加载数据 ───────────────────────────────────────────────────
+fetch('/api/leaders')
+  .then(r => r.json())
+  .then(data => {
+    const hint = document.getElementById('leaders-hint');
+    if (data && data[0] && data[0].error) {
+      hint.textContent = '加载失败';
+      document.getElementById('leaders-container').innerHTML =
+        `<div class="loading-mask"><span style="color:var(--down)">${data[0].error}</span></div>`;
+      return;
+    }
+    _leadersData = data || [];
+    hint.textContent = `共 ${_leadersData.length} 个行业`;
+    renderLeaders(_leadersData);
+  })
+  .catch(err => {
+    document.getElementById('leaders-hint').textContent = '加载失败';
+    document.getElementById('leaders-container').innerHTML =
+      `<div class="loading-mask"><span style="color:var(--down)">请求失败：${err.message}</span></div>`;
+  });
+</script>
+{% endblock %}

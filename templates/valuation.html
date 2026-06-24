@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}行业估值 - 股票雷达{% endblock %}
+
+{% block head %}
+<style>
+  .level-1 td:first-child { font-weight:700;color:var(--text1); }
+  .level-2 td:first-child { padding-left:24px;color:var(--text2); }
+  .pe-low  { color:var(--down);font-weight:700; }
+  .pe-mid  { color:var(--text1); }
+  .pe-high { color:#f5a623;font-weight:700; }
+  .pe-vhigh{ color:var(--up);font-weight:700; }
+  .pe-null { color:var(--text3);font-size:.72rem; }
+  .sort-arrow { font-size:.65rem;margin-left:2px;opacity:.5; }
+  .sortable.asc  .sort-arrow:after { content:'▲'; }
+  .sortable.desc .sort-arrow:after { content:'▼'; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row g-2 mb-3">
+  <div class="col-12">
+    <div class="panel">
+      <div class="panel-hd">
+        <div class="hd-title"><div class="accent-bar"></div>行业市盈率（证监会分类）</div>
+        <div class="d-flex align-items-center gap-3">
+          <label class="d-flex align-items-center gap-1" style="font-size:.78rem;color:var(--text2);cursor:pointer">
+            <input type="checkbox" id="toggle-l2" onchange="renderTable()"> 展开二级行业
+          </label>
+          <span id="update-hint" style="font-size:.72rem;color:var(--text3)">加载中...</span>
+        </div>
+      </div>
+      <div class="panel-body-flush table-responsive">
+        <table class="data-table" id="val-table">
+          <thead>
+            <tr>
+              <th>行业名称</th>
+              <th class="text-end sortable" id="th-pe-w" onclick="sortBy('pe_weighted')">PE 加权<span class="sort-arrow"></span></th>
+              <th class="text-end sortable" id="th-pe-m" onclick="sortBy('pe_median')">PE 中位数<span class="sort-arrow"></span></th>
+              <th class="text-end sortable" id="th-co" onclick="sortBy('company_count')">公司数<span class="sort-arrow"></span></th>
+              <th class="text-end sortable" id="th-mc" onclick="sortBy('mkt_cap')">总市值(亿)<span class="sort-arrow"></span></th>
+            </tr>
+          </thead>
+          <tbody id="val-tbody">
+            <tr><td colspan="5" class="text-center text-muted py-4">加载中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="panel-body" style="padding-top:8px;border-top:1px solid var(--border)">
+        <div style="font-size:.72rem;color:var(--text3);line-height:1.8">
+          数据来源：巨潮资讯 · 证监会行业分类 &nbsp;|&nbsp;
+          <span class="pe-low">■</span> PE &lt; 15（低估参考）&nbsp;
+          <span class="pe-mid">■</span> 15–40（合理）&nbsp;
+          <span class="pe-high">■</span> 40–80（偏高）&nbsp;
+          <span class="pe-vhigh">■</span> &gt; 80（高估参考）
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let allRows=[], sortState={key:'pe_weighted', desc:false};
+
+function peClass(v){
+  if(v==null)return 'pe-null';
+  if(v<15)return 'pe-low';
+  if(v<40)return 'pe-mid';
+  if(v<80)return 'pe-high';
+  return 'pe-vhigh';
+}
+function fmtPe(v){ return v!=null?v.toFixed(1):'—'; }
+function fmtMktCap(v){ return v!=null?(v/1e4).toFixed(0):'—'; }
+
+function sortBy(key){
+  if(sortState.key===key) sortState.desc=!sortState.desc;
+  else { sortState.key=key; sortState.desc=(key!=='pe_weighted'&&key!=='pe_median'); }
+  document.querySelectorAll('thead .sortable').forEach(th=>{
+    th.classList.remove('asc','desc');
+  });
+  const thMap={pe_weighted:'th-pe-w',pe_median:'th-pe-m',company_count:'th-co',mkt_cap:'th-mc'};
+  const th=document.getElementById(thMap[key]);
+  if(th)th.classList.add(sortState.desc?'desc':'asc');
+  renderTable();
+}
+
+function renderTable(){
+  const showL2=document.getElementById('toggle-l2').checked;
+  let rows=showL2?[...allRows]:allRows.filter(r=>r.level===1);
+
+  // Sort within each level-1 group
+  if(showL2){
+    // Group by level-1 code prefix, sort level-2 within group
+    const l1=rows.filter(r=>r.level===1);
+    const l2map={};
+    rows.filter(r=>r.level===2).forEach(r=>{
+      const prefix=r.code.slice(0,1);
+      if(!l2map[prefix])l2map[prefix]=[];
+      l2map[prefix].push(r);
+    });
+    const sorted=[];
+    l1.sort((a,b)=>cmp(a,b)).forEach(r=>{
+      sorted.push(r);
+      const children=(l2map[r.code]||[]).sort((a,b)=>cmp(a,b));
+      children.forEach(c=>sorted.push(c));
+    });
+    rows=sorted;
+  } else {
+    rows.sort((a,b)=>cmp(a,b));
+  }
+
+  document.getElementById('val-tbody').innerHTML=rows.map(r=>{
+    const pc=peClass(r.pe_weighted);
+    const pm=peClass(r.pe_median);
+    return `<tr class="level-${r.level}">
+      <td>${r.name}</td>
+      <td class="text-end num"><span class="${pc}">${fmtPe(r.pe_weighted)}</span></td>
+      <td class="text-end num"><span class="${pm}">${fmtPe(r.pe_median)}</span></td>
+      <td class="text-end num" style="font-size:.82rem;color:var(--text2)">${r.company_count||'—'}</td>
+      <td class="text-end num" style="font-size:.82rem;color:var(--text2)">${fmtMktCap(r.mkt_cap)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function cmp(a,b){
+  const av=a[sortState.key]??Infinity, bv=b[sortState.key]??Infinity;
+  return sortState.desc?bv-av:av-bv;
+}
+
+fetch('/api/valuation/industry_pe').then(r=>r.json()).then(data=>{
+  if(data&&data[0]&&data[0].error){
+    document.getElementById('val-tbody').innerHTML=`<tr><td colspan="5" class="text-center text-danger py-3">数据加载失败：${data[0].error}</td></tr>`;
+    return;
+  }
+  allRows=data||[];
+  document.getElementById('update-hint').textContent=`共 ${allRows.filter(r=>r.level===1).length} 个一级行业`;
+  // Default sort: PE ascending
+  document.getElementById('th-pe-w').classList.add('asc');
+  renderTable();
+}).catch(e=>{
+  document.getElementById('val-tbody').innerHTML='<tr><td colspan="5" class="text-center text-danger py-3">请求失败</td></tr>';
+});
+
+// 激活导航
+document.addEventListener('DOMContentLoaded',()=>{
+  document.querySelectorAll('.nav-links a').forEach(a=>a.classList.remove('active'));
+  const n=document.getElementById('nav-valuation');
+  if(n)n.classList.add('active');
+});
+</script>
+{% endblock %}

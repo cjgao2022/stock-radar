@@ -1,0 +1,345 @@
+{% extends "base.html" %}
+{% block title %}公告研报 - 股票雷达{% endblock %}
+
+{% block head %}
+<style>
+  .news-tabs { display:flex; gap:6px; margin-bottom:12px; }
+  .news-tab {
+    padding:5px 16px; border-radius:20px; font-size:.82rem; font-weight:600;
+    border:1.5px solid var(--border2); background:transparent; color:var(--text2);
+    cursor:pointer; transition:all .15s;
+  }
+  .news-tab.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .news-tab:hover:not(.active) { border-color:var(--accent); color:var(--accent); }
+
+  .type-filter { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:10px; }
+  .type-chip {
+    padding:3px 10px; border-radius:12px; font-size:.72rem; cursor:pointer;
+    border:1px solid var(--border); background:transparent; color:var(--text2);
+    transition:all .12s;
+  }
+  .type-chip.active { background:var(--accent2); border-color:var(--accent2); color:#fff; }
+  .type-chip:hover:not(.active) { border-color:var(--accent2); color:var(--accent2); }
+
+  .ann-link { color:var(--text1); text-decoration:none; word-break:break-all; }
+  .ann-link:hover { color:var(--accent); text-decoration:underline; }
+  .title-cell { word-break:break-all; }
+
+  .rating-badge {
+    display:inline-block; padding:1px 7px; border-radius:4px;
+    font-size:.72rem; font-weight:700;
+  }
+  .rating-buy    { background:rgba(232,55,74,.12);  color:var(--up); }
+  .rating-hold   { background:rgba(245,166,35,.12); color:#f5a623; }
+  .rating-sell   { background:rgba(24,163,97,.12);  color:var(--down); }
+  .rating-other  { background:var(--flat-bg);       color:var(--text2); }
+
+  .stock-select {
+    padding:5px 10px; border-radius:7px; border:1.5px solid var(--border2);
+    background:var(--input-bg); color:var(--text1); font-size:.84rem; outline:none;
+    transition:border-color .15s; min-width:160px;
+  }
+  .stock-select:focus { border-color:var(--accent); }
+  [data-theme="dark"]  .stock-select { color-scheme:dark; }
+  [data-theme="light"] .stock-select { color-scheme:light; background:#fff; }
+  [data-theme="dark"]  .stock-select option { background:#111827; color:#e0e8f0; }
+  [data-theme="light"] .stock-select option { background:#ffffff; color:#1a2035; }
+
+  /* 分页 */
+  .pg-bar {
+    display:flex; align-items:center; gap:8px;
+    padding:8px 12px; font-size:.78rem; color:var(--text2);
+    border-top:1px solid var(--border);
+  }
+  .pg-btn {
+    width:28px; height:28px; border-radius:6px; border:1px solid var(--border2);
+    background:transparent; color:var(--text1); cursor:pointer; font-size:.9rem;
+    display:flex; align-items:center; justify-content:center; transition:all .12s;
+  }
+  .pg-btn:hover:not(:disabled) { border-color:var(--accent); color:var(--accent); }
+  .pg-btn:disabled { opacity:.35; cursor:not-allowed; }
+  .pg-info { font-variant-numeric:tabular-nums; }
+  .pg-total { margin-left:4px; color:var(--text3); font-size:.72rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── Panel 1：公告 ──────────────────────────────────────────── -->
+<div class="row g-2 mb-2">
+  <div class="col-12">
+    <div class="panel">
+      <div class="panel-hd">
+        <div class="hd-title"><div class="accent-bar"></div>A股公告</div>
+        <span id="ann-hint" style="font-size:.72rem;color:rgba(255,255,255,.4)">加载中...</span>
+      </div>
+      <div class="panel-body" style="padding:10px 12px">
+
+        <div class="news-tabs">
+          <button class="news-tab active" id="tab-watchlist" onclick="switchAnnTab('watchlist')">持仓股</button>
+          <button class="news-tab"        id="tab-market"    onclick="switchAnnTab('market')">全市场</button>
+        </div>
+
+        <div class="type-filter" id="type-filter">
+          <button class="type-chip active" data-type="">全部</button>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table" id="ann-table">
+            <thead>
+              <tr>
+                <th style="white-space:nowrap">代码</th>
+                <th style="white-space:nowrap">名称</th>
+                <th>公告标题</th>
+                <th style="white-space:nowrap">类型</th>
+                <th style="white-space:nowrap">日期</th>
+              </tr>
+            </thead>
+            <tbody id="ann-tbody">
+              <tr><td colspan="5" class="text-center text-muted py-3">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+      <div id="ann-pagination"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Panel 2：研报 ──────────────────────────────────────────── -->
+<div class="row g-2">
+  <div class="col-12">
+    <div class="panel">
+      <div class="panel-hd">
+        <div class="hd-title"><div class="accent-bar"></div>研究报告</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:.72rem;color:rgba(255,255,255,.4)">来源：东方财富</span>
+          <select class="stock-select" id="research-code-sel" onchange="loadResearch()">
+            <option value="">全部持仓股</option>
+          </select>
+        </div>
+      </div>
+      <div class="panel-body-flush table-responsive">
+        <table class="data-table" id="research-table">
+          <thead>
+            <tr>
+              <th style="white-space:nowrap">代码</th>
+              <th style="white-space:nowrap">股票</th>
+              <th>研报标题</th>
+              <th style="white-space:nowrap">东财评级</th>
+              <th style="white-space:nowrap">机构</th>
+              <th style="white-space:nowrap">日期</th>
+            </tr>
+          </thead>
+          <tbody id="research-tbody">
+            <tr><td colspan="6" class="text-center text-muted py-3">加载中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="res-pagination"></div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const PAGE_SIZE = 10;
+
+// ── 公告状态 ───────────────────────────────────────────────────
+let _annData     = [];
+let _annFiltered = [];
+let _annPage     = 1;
+let _annScope    = 'watchlist';
+
+// ── 研报状态 ───────────────────────────────────────────────────
+let _resData = [];
+let _resPage = 1;
+
+// ── 分页渲染 ───────────────────────────────────────────────────
+function renderPagination(containerId, page, total, onPageFn) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  if (totalPages <= 1) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="pg-bar">
+    <button class="pg-btn" onclick="${onPageFn}(${page - 1})" ${page <= 1 ? 'disabled' : ''}>‹</button>
+    <span class="pg-info">第 ${page} / ${totalPages} 页</span>
+    <button class="pg-btn" onclick="${onPageFn}(${page + 1})" ${page >= totalPages ? 'disabled' : ''}>›</button>
+    <span class="pg-total">共 ${total} 条</span>
+  </div>`;
+}
+
+// ── 公告 Tab 切换 ─────────────────────────────────────────────
+function switchAnnTab(scope) {
+  _annScope = scope;
+  document.getElementById('tab-watchlist').classList.toggle('active', scope === 'watchlist');
+  document.getElementById('tab-market').classList.toggle('active', scope === 'market');
+  loadAnnouncements();
+}
+
+function loadAnnouncements() {
+  const hint = document.getElementById('ann-hint');
+  hint.textContent = '加载中...';
+  document.getElementById('ann-tbody').innerHTML =
+    '<tr><td colspan="5" class="text-center text-muted py-3">加载中...</td></tr>';
+  document.getElementById('ann-pagination').innerHTML = '';
+
+  fetch(`/api/news/announcements?scope=${_annScope}`)
+    .then(r => r.json())
+    .then(data => {
+      if (data && data[0] && data[0].error) {
+        hint.textContent = '加载失败';
+        document.getElementById('ann-tbody').innerHTML =
+          `<tr><td colspan="5" class="text-center text-danger py-3">${data[0].error}</td></tr>`;
+        return;
+      }
+      _annData = data || [];
+      hint.textContent = `共 ${_annData.length} 条`;
+      buildTypeFilter(_annData);
+      applyAnnFilter();
+    })
+    .catch(() => {
+      hint.textContent = '加载失败';
+      document.getElementById('ann-tbody').innerHTML =
+        '<tr><td colspan="5" class="text-center text-danger py-3">请求失败</td></tr>';
+    });
+}
+
+function buildTypeFilter(data) {
+  const types = [...new Set(data.map(d => d.type).filter(Boolean))].sort();
+  const wrap = document.getElementById('type-filter');
+  wrap.innerHTML = `<button class="type-chip active" data-type="" onclick="filterByType('')">全部</button>` +
+    types.map(t => `<button class="type-chip" data-type="${t}" onclick="filterByType('${encodeType(t)}')">${t}</button>`).join('');
+}
+
+function encodeType(t) { return t.replace(/'/g, "\\'"); }
+
+function filterByType(type) {
+  document.querySelectorAll('.type-chip').forEach(el => {
+    el.classList.toggle('active', el.dataset.type === type);
+  });
+  _annFiltered = type ? _annData.filter(d => d.type === type) : _annData;
+  _annPage = 1;
+  renderAnnPage();
+}
+
+function applyAnnFilter() {
+  const active = document.querySelector('.type-chip.active');
+  const type = active ? active.dataset.type : '';
+  _annFiltered = type ? _annData.filter(d => d.type === type) : _annData;
+  _annPage = 1;
+  renderAnnPage();
+}
+
+function annGoPage(p) {
+  _annPage = p;
+  renderAnnPage();
+  document.getElementById('ann-table').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderAnnPage() {
+  const tbody = document.getElementById('ann-tbody');
+  const total = _annFiltered.length;
+  if (total === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">暂无公告</td></tr>';
+    document.getElementById('ann-pagination').innerHTML = '';
+    return;
+  }
+  const start = (_annPage - 1) * PAGE_SIZE;
+  const slice = _annFiltered.slice(start, start + PAGE_SIZE);
+  tbody.innerHTML = slice.map(d => {
+    const link = d.url
+      ? `<a class="ann-link" href="${d.url}" target="_blank" rel="noopener">${d.title}</a>`
+      : `<span class="title-cell">${d.title}</span>`;
+    return `<tr>
+      <td class="num" style="white-space:nowrap">${d.code}</td>
+      <td style="white-space:nowrap">${d.name}</td>
+      <td class="title-cell">${link}</td>
+      <td style="font-size:.76rem;color:var(--text2);white-space:nowrap">${d.type || '—'}</td>
+      <td class="num" style="white-space:nowrap;color:var(--text2)">${d.date || '—'}</td>
+    </tr>`;
+  }).join('');
+  renderPagination('ann-pagination', _annPage, total, 'annGoPage');
+}
+
+// ── 研报 ───────────────────────────────────────────────────────
+function ratingClass(r) {
+  if (!r) return 'rating-other';
+  if (/买入|增持|强烈推荐|推荐/.test(r)) return 'rating-buy';
+  if (/持有|中性|观望/.test(r))          return 'rating-hold';
+  if (/减持|卖出/.test(r))               return 'rating-sell';
+  return 'rating-other';
+}
+
+function loadResearch() {
+  const code = document.getElementById('research-code-sel').value;
+  document.getElementById('research-tbody').innerHTML =
+    '<tr><td colspan="6" class="text-center text-muted py-3">加载中...</td></tr>';
+  document.getElementById('res-pagination').innerHTML = '';
+
+  fetch(`/api/news/research?code=${code}`)
+    .then(r => r.json())
+    .then(data => {
+      _resData = data || [];
+      _resPage = 1;
+      renderResPage();
+    })
+    .catch(() => {
+      document.getElementById('research-tbody').innerHTML =
+        '<tr><td colspan="6" class="text-center text-danger py-3">请求失败</td></tr>';
+    });
+}
+
+function resGoPage(p) {
+  _resPage = p;
+  renderResPage();
+  document.getElementById('research-table').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderResPage() {
+  const tbody = document.getElementById('research-tbody');
+  const total = _resData.length;
+  if (total === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">暂无研报</td></tr>';
+    document.getElementById('res-pagination').innerHTML = '';
+    return;
+  }
+  const start = (_resPage - 1) * PAGE_SIZE;
+  const slice = _resData.slice(start, start + PAGE_SIZE);
+  tbody.innerHTML = slice.map(d => {
+    const link = d.url
+      ? `<a class="ann-link" href="${d.url}" target="_blank" rel="noopener">${d.title}</a>`
+      : `<span class="title-cell">${d.title}</span>`;
+    return `<tr>
+      <td class="num" style="white-space:nowrap">${d.code}</td>
+      <td style="white-space:nowrap">${d.stock_name}</td>
+      <td class="title-cell">${link}</td>
+      <td><span class="rating-badge ${ratingClass(d.rating)}">${d.rating || '—'}</span></td>
+      <td style="font-size:.76rem;color:var(--text2);white-space:nowrap">${d.institution}</td>
+      <td class="num" style="white-space:nowrap;color:var(--text2)">${d.date || '—'}</td>
+    </tr>`;
+  }).join('');
+  renderPagination('res-pagination', _resPage, total, 'resGoPage');
+}
+
+// ── 初始化 ─────────────────────────────────────────────────────
+fetch('/api/stocks/watchlist')
+  .then(r => r.json())
+  .then(list => {
+    if (!list || !list.length) return;
+    const sel = document.getElementById('research-code-sel');
+    list.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.code;
+      opt.textContent = `${s.code} ${s.name}`;
+      sel.appendChild(opt);
+    });
+  });
+
+loadAnnouncements();
+loadResearch();
+</script>
+{% endblock %}

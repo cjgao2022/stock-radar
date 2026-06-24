@@ -4,7 +4,7 @@
 
 本地运行，FastAPI + Jinja2，数据源：新浪行情 + AKShare（THS/东方财富）。
 
-最近验证：2026-06-24（情绪历史图成交额曲线）
+最近验证：2026-06-24（行业龙头页、导航栏日期时间、深色下拉修复）
 
 ---
 
@@ -75,12 +75,20 @@
 - [x] 代码直查名称完整（修正 Sina hq 截断 + suggest `parts[4]` 取完整显示名）
 - [x] 查询面板支持清空按钮
 
+### 基本面与宏观研究（P0/P1）
+- [x] **个股基本面快照**：持仓表格新增 PE（静态）/ PB / ROE 三列；THS `stock_financial_abstract_ths` 取年报 EPS + 最新季报 BVPS/ROE，PE/PB 由前端用实时价格计算；6h 缓存
+- [x] **行业估值扫描**：新增 `/valuation` 页，展示巨潮资讯（证监会行业分类）19 个一级行业 PE 加权/中位数，可展开二级行业，1h 缓存
+- [x] **宏观数据面板**：新增 `/macro` 页，展示 CPI 月率 / PPI 年率 / PMI 制造业 / M2 年率近 36 期历史折线图（ECharts 2×2 布局）；PMI 标注 50 荣枯线；24h 缓存；数据源：东方财富宏观日历（AKShare）
+- [x] **公告 + 研报页**：新增 `/news` 页；公告分持仓股/全市场 Tab，支持按公告类型筛选，点击标题跳东方财富原文；研报支持按持仓股下拉筛选，PDF 链接可直接打开；数据源：东方财富 `stock_individual_notice_report` / `stock_notice_report` / `stock_research_report_em`；公告 30 分钟缓存，研报 1 小时缓存
+- [x] **行业龙头页**：新增 `/leaders` 页，申万一级行业（31个）每行业展示成交额 TOP5 龙头股；排序支持行业涨跌幅/成交额/名称；点击股票代码弹 K 线；数据源：`sw_index_first_info` + `index_stock_cons` × 31 + `stock_zh_a_spot`；行业成分股映射 24h 模块缓存，整体结果 30 分钟路由缓存；首次加载约 60s，之后命中缓存秒级响应
+
 ### 设计系统
 - [x] 全站统一设计系统（CSS 变量、`panel`/`stat-card`/`chg-badge`/`data-table` 组件）
 - [x] 深色 / 亮色双主题（localStorage 持久化）
-- [x] 深色渐变导航栏，实时时钟（北京时间），当前页高亮（导航栏不展示指数行情，避免与首页指数卡片重复）
+- [x] 深色渐变导航栏，实时时钟（`yyyy-mm-dd hh:mm:ss` 北京时间，`sv-SE` locale），当前页高亮
 - [x] 红涨绿跌配色，数字等宽字体（tabular-nums）
 - [x] 所有时间展示强制使用北京时间（`timeZone:'Asia/Shanghai'`）
+- [x] 深色主题 `<select>` option 可见性修复：`color-scheme:dark` + `option { background:#111827; color:#e0e8f0 }`
 
 ---
 
@@ -89,6 +97,7 @@
 | 功能 | 原因 |
 |------|------|
 | 北向资金（沪深港通） | 东方财富 `成交净买额` 数据自 2024-08 起全部断档（NaN/null），AKShare 所有 hsgt 接口均受影响，无可用替代数据源 |
+| 事件日历（`/calendar`） | 解禁接口走东方财富 push2（被代理封锁），宏观日历因 AKShare 数据截止 2025-08 为空，三块内容均无法展示，已整体移除 |
 
 ---
 
@@ -97,6 +106,7 @@
 | 问题 | 状态 |
 |------|------|
 | 东方财富 `push2.eastmoney.com` 在当前网络被代理封锁 | 板块构成股接口受影响，提示用户切换网络；板块 K 线已改用 THS 接口规避；个股/ETF K 线已改用新浪 `CN_MarketDataService` 接口规避 |
+| AKShare 宏观数据截止 2025-08 | `macro_china_cpi_monthly` 等 4 个函数数据仅到 2025-08；属 AKShare 数据源更新滞后，历史趋势图仍有参考价值 |
 | 概念板块无上涨/下跌家数 | THS 概念接口不提供该字段，显示 `-`，属接口限制 |
 | 板块 K 线仅有日 K | THS 接口无 period 参数，东财月K接口走 push2 被封；当前以拉取日数据（最多365日）代替 |
 

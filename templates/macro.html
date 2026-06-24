@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+{% block title %}宏观数据 - 股票雷达{% endblock %}
+
+{% block head %}
+<style>
+  .macro-chart { width: 100%; height: 200px; }
+  .ind-badge {
+    font-size: .92rem; font-weight: 800;
+    font-family: var(--num);
+    letter-spacing: .5px;
+  }
+  .ind-meta { font-size: .7rem; color: rgba(255,255,255,.4); margin-top: 1px; }
+  .cal-date { font-family: var(--num); font-size: .82rem; }
+  .cal-val  { font-family: var(--num); font-size: .82rem; color: var(--text2); }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- 4 指标图表 -->
+<div class="row g-2 mb-2">
+  {% set panels = [
+    ('cpi', 'CPI 月率'),
+    ('ppi', 'PPI 年率'),
+    ('pmi', 'PMI 制造业'),
+    ('m2',  'M2 年率'),
+  ] %}
+  {% for key, title in panels %}
+  <div class="col-md-6">
+    <div class="panel">
+      <div class="panel-hd">
+        <div class="hd-title">
+          <div class="accent-bar"></div>{{ title }}
+        </div>
+        <div style="text-align:right">
+          <div class="ind-badge" id="badge-{{ key }}">--</div>
+          <div class="ind-meta" id="meta-{{ key }}">加载中</div>
+        </div>
+      </div>
+      <div class="panel-body" style="padding:8px 12px 10px">
+        <div id="chart-{{ key }}" class="macro-chart"></div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- 即将发布日历 -->
+<div class="row g-2">
+  <div class="col-12">
+    <div class="panel">
+      <div class="panel-hd">
+        <div class="hd-title"><div class="accent-bar"></div>即将发布（近 90 天）</div>
+        <span style="font-size:.72rem;color:rgba(255,255,255,.4)">数据来源：东方财富宏观日历</span>
+      </div>
+      <div class="panel-body-flush table-responsive">
+        <table class="data-table" id="cal-table">
+          <thead>
+            <tr>
+              <th>发布日期</th>
+              <th>指标名称</th>
+              <th class="text-end">前值</th>
+              <th class="text-end">预测值</th>
+            </tr>
+          </thead>
+          <tbody id="cal-tbody">
+            <tr><td colspan="4" class="text-center text-muted py-3">加载中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="panel-body" style="padding-top:8px;border-top:1px solid var(--border)">
+        <div style="font-size:.72rem;color:var(--text3)">
+          PMI 荣枯线：50（&gt;50 扩张 / &lt;50 收缩）&nbsp;|&nbsp;
+          CPI/PPI/M2 为同比年率（%）
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const COLORS = {
+  red:    {line:'#e8374a', areaTop:'rgba(232,55,74,.22)', areaBot:'rgba(0,0,0,0)'},
+  green:  {line:'#18a361', areaTop:'rgba(24,163,97,.18)',  areaBot:'rgba(0,0,0,0)'},
+  blue:   {line:'#3d7efc', areaTop:'rgba(61,126,252,.22)', areaBot:'rgba(0,0,0,0)'},
+  orange: {line:'#f5a623', areaTop:'rgba(245,166,35,.22)', areaBot:'rgba(0,0,0,0)'},
+};
+
+function getColors(key, latest) {
+  if (key === 'pmi') return latest != null && latest >= 50 ? COLORS.blue : COLORS.orange;
+  if (latest == null) return COLORS.blue;
+  return latest >= 0 ? COLORS.red : COLORS.green;
+}
+
+function renderChart(key, data) {
+  const el = document.getElementById('chart-' + key);
+  if (!el) return;
+  const chart = echarts.init(el);
+  window.addEventListener('resize', () => chart.resize());
+
+  const badge = document.getElementById('badge-' + key);
+  const meta  = document.getElementById('meta-' + key);
+
+  if (!data || !data.hist || data.hist.length === 0) {
+    if (badge) badge.textContent = '--';
+    if (meta)  meta.textContent  = '暂无数据';
+    chart.setOption({graphic:[{type:'text',left:'center',top:'middle',
+      style:{text:'暂无数据',fill:'var(--text3)',fontSize:13}}]});
+    return;
+  }
+
+  const dates  = data.hist.map(d => d.date.slice(0, 7)); // YYYY-MM
+  const vals   = data.hist.map(d => d.value);
+  const latest = data.latest;
+  const suffix = key === 'pmi' ? '' : '%';
+  const clr    = getColors(key, latest);
+
+  if (badge) {
+    badge.textContent = latest != null ? latest.toFixed(1) + suffix : '--';
+    badge.style.color = clr.line;
+  }
+  if (meta && data.last_date) {
+    const prev = data.prev != null ? (data.prev >= 0 ? '+' : '') + data.prev.toFixed(1) + suffix : '--';
+    meta.textContent = '前值 ' + prev + ' · 截至 ' + data.last_date.slice(0, 7);
+  }
+
+  const isPmi = key === 'pmi';
+  chart.setOption({
+    backgroundColor: 'transparent',
+    animation: false,
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'rgba(13,21,38,.92)',
+      borderColor: 'rgba(255,255,255,.1)',
+      textStyle: {color: '#e0e8f8', fontSize: 11},
+      formatter: params => {
+        const p = params[0];
+        if (!p) return '';
+        const v = p.data;
+        const s = v != null ? (v >= 0 && !isPmi ? '+' : '') + v.toFixed(1) + suffix : '--';
+        return `${p.axisValueLabel}<br><b style="color:${clr.line}">${s}</b>`;
+      }
+    },
+    grid: {left: 46, right: 10, top: 8, bottom: 22},
+    xAxis: {
+      type: 'category',
+      data: dates,
+      boundaryGap: false,
+      axisLabel: {color: '#5a6a8a', fontSize: 9, interval: Math.floor(dates.length / 6)},
+      axisLine: {lineStyle: {color: '#2a3550'}},
+      splitLine: {show: false}
+    },
+    yAxis: {
+      type: 'value',
+      scale: true,
+      axisLabel: {color: '#5a6a8a', fontSize: 9, formatter: v => v.toFixed(1)},
+      splitLine: {lineStyle: {color: '#1e2c48', type: 'dashed'}}
+    },
+    series: [{
+      type: 'line',
+      data: vals,
+      smooth: false,
+      symbol: 'none',
+      lineStyle: {width: 1.5, color: clr.line},
+      areaStyle: {
+        color: {type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+          colorStops: [{offset: 0, color: clr.areaTop}, {offset: 1, color: clr.areaBot}]}
+      },
+      markLine: isPmi ? {
+        silent: true, symbol: 'none',
+        lineStyle: {type: 'dashed', color: 'rgba(245,166,35,.6)', width: 1},
+        label: {show: true, position: 'insideEndTop', formatter: '50', color: '#f5a623', fontSize: 9},
+        data: [{yAxis: 50}]
+      } : {data: []}
+    }]
+  });
+}
+
+function renderCalendar(events) {
+  const tbody = document.getElementById('cal-tbody');
+  if (!events || events.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">近 90 天内暂无计划发布数据</td></tr>';
+    return;
+  }
+  tbody.innerHTML = events.map(e => {
+    const prev = e.prev != null ? e.prev.toFixed(1) : '—';
+    const fore = e.forecast != null ? e.forecast.toFixed(1) : '—';
+    return `<tr>
+      <td class="cal-date">${e.date}</td>
+      <td>${e.name}</td>
+      <td class="text-end cal-val">${prev}</td>
+      <td class="text-end cal-val">${fore}</td>
+    </tr>`;
+  }).join('');
+}
+
+Promise.all([
+  fetch('/api/macro/indicators').then(r => r.json()),
+  fetch('/api/macro/calendar').then(r => r.json()),
+]).then(([ind, cal]) => {
+  ['cpi', 'ppi', 'pmi', 'm2'].forEach(key => renderChart(key, ind[key]));
+  renderCalendar(cal);
+}).catch(() => {
+  document.getElementById('cal-tbody').innerHTML =
+    '<tr><td colspan="4" class="text-center text-danger py-3">数据加载失败</td></tr>';
+});
+</script>
+{% endblock %}

@@ -6,6 +6,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 from data.fetchers.stocks import fetch_watchlist, fetch_etf_watchlist, search_stock, search_etf, fetch_stock_kline, fetch_quotes
 from data.fetchers.flow import fetch_stock_flow, fetch_stock_flow_rank_all
+from data.fetchers.fundamentals import fetch_stock_fundamental
 from data.watchlist_store import add_stock, remove_stock, add_etf, remove_etf, update_stock_cost, update_etf_cost
 from data.cache import get_cached
 
@@ -156,6 +157,22 @@ def api_flow_rank():
                 or str(r.get("code", "")) in codes]
 
     return get_cached(key, 300, _fetch)
+
+
+@router.get("/fundamentals")
+def api_fundamentals(codes: str = ""):
+    """返回个股基本面快照（eps/bvps/roe/profit_yoy），格式: {code: {...}}
+    每只股按日期缓存 6 小时，error 响应不缓存。
+    """
+    today = _date.today()
+    code_list = [c.strip() for c in codes.split(",") if c.strip() and len(c.strip()) == 6]
+    if not code_list:
+        return {}
+    result = {}
+    for code in code_list:
+        key = f"fund_{code}_{today}"
+        result[code] = get_cached(key, 21600, lambda c=code: fetch_stock_fundamental(c))
+    return result
 
 
 @router.get("/{code}/flow")
