@@ -139,15 +139,6 @@
     }
     .theme-btn:hover { background: rgba(255,255,255,.2); color: #fff; }
 
-    /* 导航栏指数行情 */
-    .nav-indices { display: flex; gap: 12px; align-items: center; }
-    .nav-idx-item { display: flex; align-items: baseline; gap: 5px; font-size: .74rem; letter-spacing: .2px; }
-    .nav-idx-name  { color: rgba(255,255,255,.35); }
-    .nav-idx-price { color: rgba(255,255,255,.8); font-weight: 700; font-variant-numeric: tabular-nums; }
-    .nav-idx-chg   { font-size: .7rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-    .nav-idx-chg.up   { color: #f08090; }
-    .nav-idx-chg.down { color: #56c98e; }
-    @media (max-width: 900px) { .nav-indices { display: none; } }
 
     /* ── 主布局 ── */
     .main-wrap { padding: 16px 16px 32px; }
@@ -294,10 +285,6 @@
     [data-theme="light"] .topnav .nav-links a.active { color: var(--accent); background: #e8f0fe; }
     [data-theme="light"] .topnav .market-status { color: var(--text3); }
     [data-theme="light"] .theme-btn { border-color: var(--border2); background: var(--flat-bg); color: var(--text2); }
-    [data-theme="light"] .nav-idx-name  { color: var(--text3); }
-    [data-theme="light"] .nav-idx-price { color: var(--text1); }
-    [data-theme="light"] .nav-idx-chg.up   { color: var(--up);   }
-    [data-theme="light"] .nav-idx-chg.down { color: var(--down); }
 
     /* panel-hd */
     [data-theme="light"] .panel-hd {
@@ -404,7 +391,6 @@
     <a href="/stocks" id="nav-stocks">个股</a>
     <a href="/etf"    id="nav-etf">ETF</a>
   </div>
-  <div class="nav-indices" id="nav-indices"></div>
   <div class="market-status">
     <button class="theme-btn" id="theme-btn" title="切换主题" onclick="toggleTheme()">🌙</button>
     <span class="status-dot" id="status-dot"></span>
@@ -440,6 +426,11 @@
           <button class="days-btn"        onclick="loadModalKline('daily')"    id="kbtn-daily">日K</button>
           <button class="days-btn"        onclick="loadModalKline('monthly')"  id="kbtn-monthly">月K</button>
           <button class="days-btn"        onclick="loadModalKline('yearly')"   id="kbtn-yearly">年K</button>
+        </div>
+        <div class="d-flex gap-1 ms-3" id="ma-btns" style="display:none!important">
+          <button class="days-btn active" id="ma-btn-5"  onclick="toggleMA(5)"  style="color:#f5a623;border-color:#f5a623;font-size:.68rem;padding:2px 7px">MA5</button>
+          <button class="days-btn active" id="ma-btn-10" onclick="toggleMA(10)" style="color:#7ed321;border-color:#7ed321;font-size:.68rem;padding:2px 7px">MA10</button>
+          <button class="days-btn active" id="ma-btn-20" onclick="toggleMA(20)" style="color:#bd10e0;border-color:#bd10e0;font-size:.68rem;padding:2px 7px">MA20</button>
         </div>
         <button class="kline-close" data-bs-dismiss="modal">✕</button>
       </div>
@@ -498,23 +489,6 @@ function updateClock() {
 updateClock();
 setInterval(updateClock, 1000);
 
-// ── 导航栏实时指数 ──
-function loadNavIndices() {
-  fetch('/api/indices').then(r=>r.json()).then(data=>{
-    const show = data.filter(d=>['上证指数','深证成指','创业板指','科创50'].includes(d.name));
-    document.getElementById('nav-indices').innerHTML = show.map(d=>{
-      const cls = d.change_pct>0?'up':d.change_pct<0?'down':'';
-      return `<div class="nav-idx-item">
-        <span class="nav-idx-name">${d.name.replace('指数','').replace('深证成指','深证').replace('科创50','科创')}</span>
-        <span class="nav-idx-price">${d.price!=null?d.price.toFixed(2):'--'}</span>
-        <span class="nav-idx-chg ${cls}">${d.change_pct!=null?(d.change_pct>0?'+':'')+d.change_pct.toFixed(2)+'%':'--'}</span>
-      </div>`;
-    }).join('');
-  }).catch(()=>{});
-}
-loadNavIndices();
-setInterval(loadNavIndices, 30000);
-
 // ── 口令确认弹框 ──
 let _ccPending = null;
 
@@ -560,6 +534,23 @@ document.getElementById('code-confirm-overlay').addEventListener('click', e => {
 
 // ── K线弹框 ──
 let _klineModal=null, _klineChart=null, _klineCode='', _klineName='', _klineIsEtf=false;
+const _maVisible={5:true,10:true,20:true};
+
+function toggleMA(n){
+  _maVisible[n]=!_maVisible[n];
+  const btn=document.getElementById('ma-btn-'+n);
+  if(_maVisible[n]){
+    btn.classList.add('active');
+    btn.style.opacity='1';
+  } else {
+    btn.classList.remove('active');
+    btn.style.opacity='.35';
+  }
+  if(_klineChart){
+    const seriesNames={'5':'MA5','10':'MA10','20':'MA20'};
+    _klineChart.dispatchAction({type:_maVisible[n]?'legendSelect':'legendUnSelect',name:seriesNames[String(n)]});
+  }
+}
 
 function openKlineModal(code, name, isEtf) {
   _klineCode=code; _klineName=name; _klineIsEtf=!!isEtf;
@@ -583,6 +574,9 @@ document.getElementById('klineModal').addEventListener('shown.bs.modal', functio
 function loadModalKline(period){
   ['intraday','daily','monthly','yearly'].forEach(p =>
     document.getElementById('kbtn-'+p).classList.toggle('active', p===period));
+  // MA buttons only shown for candle charts
+  const maDiv=document.getElementById('ma-btns');
+  maDiv.style.cssText=period==='intraday'?'display:none!important':'';
   _klineChart.showLoading({text:'',maskColor:'transparent',spinnerRadius:12,lineWidth:2,color:'var(--accent)'});
   const url = _klineIsEtf
     ? `/api/stocks/etf/${_klineCode}/kline?period=${period}`
@@ -595,20 +589,34 @@ function loadModalKline(period){
         style:{text:'暂无数据',fill:'var(--text3)',fontSize:14}}]});
       return;
     }
-    d.type==='line' ? _klineIntraday(d.data) : _klineCandle(d.data, period);
+    d.type==='line' ? _klineIntraday(d.data, d.prev_close) : _klineCandle(d.data, period);
   }).catch(()=>_klineChart.hideLoading());
 }
 
-function _klineIntraday(data){
+function _klineIntraday(data, prevClose){
   const times=data.map(d=>d.t), prices=data.map(d=>d.c), vols=data.map(d=>d.v);
-  const isUp = prices[prices.length-1]>=prices[0];
-  const clr = isUp?'#e8374a':'#18a361';
+  const ref = prevClose!=null ? prevClose : prices[0];
+  const isUp = prices[prices.length-1] >= ref;
+  const clr = isUp ? '#e8374a' : '#18a361';
+  // 对称轴范围，以昨收为中轴
+  const maxDelta = Math.max(...prices.map(p=>Math.abs(p-ref))) * 1.2 || ref*0.03;
+  const axisMin = ref - maxDelta, axisMax = ref + maxDelta;
   _klineChart.setOption({
     backgroundColor:'transparent', animation:false,
     tooltip:{trigger:'axis',axisPointer:{type:'cross'},backgroundColor:'rgba(13,21,38,.92)',
-      borderColor:'rgba(255,255,255,.1)',textStyle:{color:'#e0e8f8',fontSize:11}},
+      borderColor:'rgba(255,255,255,.1)',textStyle:{color:'#e0e8f8',fontSize:11},
+      formatter:params=>{
+        const pp=params.find(p=>p.seriesIndex===0);
+        if(!pp) return '';
+        const pv=pp.data, pct=((pv-ref)/ref*100).toFixed(2);
+        const pctClr=pv>=ref?'#e8374a':'#18a361';
+        const vp=params.find(p=>p.seriesIndex===1);
+        return `${pp.axisValueLabel}<br>价格 <b>${pv.toFixed(2)}</b> <b style="color:${pctClr}">${Number(pct)>=0?'+':''}${pct}%</b>`
+             +(vp?`<br>量 <b>${Math.round(vp.value/100)}手</b>`:'');
+      }
+    },
     axisPointer:{link:[{xAxisIndex:'all'}]},
-    grid:[{left:64,right:16,top:8,height:'62%'},{left:64,right:16,top:'76%',height:'18%'}],
+    grid:[{left:64,right:54,top:8,height:'62%'},{left:64,right:54,top:'76%',height:'18%'}],
     xAxis:[
       {type:'category',data:times,gridIndex:0,boundaryGap:false,
        axisLabel:{color:'#5a6a8a',fontSize:10,showMaxLabel:false},
@@ -617,18 +625,24 @@ function _klineIntraday(data){
        axisLabel:{show:false},axisLine:{lineStyle:{color:'#2a3550'}},splitLine:{show:false}}
     ],
     yAxis:[
-      {type:'value',scale:true,gridIndex:0,
+      {type:'value',min:axisMin,max:axisMax,gridIndex:0,
        axisLabel:{color:'#5a6a8a',fontSize:10,formatter:v=>v.toFixed(2)},
        splitLine:{lineStyle:{color:'#1e2c48',type:'dashed'}}},
+      {type:'value',min:axisMin,max:axisMax,gridIndex:0,position:'right',
+       axisLabel:{color:'#5a6a8a',fontSize:10,formatter:v=>((v-ref)/ref*100).toFixed(1)+'%'},
+       splitLine:{show:false},axisLine:{show:false},axisTick:{show:false}},
       {type:'value',gridIndex:1,axisLabel:{show:false},splitLine:{show:false}}
     ],
     series:[
       {type:'line',data:prices,xAxisIndex:0,yAxisIndex:0,smooth:false,symbol:'none',
        lineStyle:{width:1.5,color:clr},
+       markLine:{silent:true,symbol:'none',
+         lineStyle:{type:'dashed',color:'rgba(140,155,180,.45)',width:1},
+         label:{show:false},data:[{yAxis:ref}]},
        areaStyle:{color:{type:'linear',x:0,y:0,x2:0,y2:1,colorStops:[
          {offset:0,color:isUp?'rgba(232,55,74,.25)':'rgba(24,163,97,.25)'},
          {offset:1,color:'rgba(0,0,0,0)'}]}}},
-      {type:'bar',data:vols,xAxisIndex:1,yAxisIndex:1,itemStyle:{color:'rgba(93,142,218,.5)'}}
+      {type:'bar',data:vols,xAxisIndex:1,yAxisIndex:2,itemStyle:{color:'rgba(93,142,218,.5)'}}
     ]
   }, true);
   _klineChart.resize();
@@ -638,20 +652,29 @@ function _klineCandle(data, period){
   const dates=data.map(d=>d.d);
   const ohlc=data.map(d=>[d.o,d.c,d.l,d.h]);
   const vols=data.map(d=>({value:d.v,itemStyle:{color:d.c>=d.o?'rgba(232,55,74,.6)':'rgba(24,163,97,.6)'}}));
+  function calcMA(n){
+    return data.map((_,i)=>i<n-1?null:+(data.slice(i-n+1,i+1).reduce((s,d)=>s+d.c,0)/n).toFixed(2));
+  }
   const initStart = period==='yearly' ? 0 : Math.max(0, Math.round((1-Math.min(data.length,120)/data.length)*100));
   _klineChart.setOption({
     backgroundColor:'transparent', animation:false,
+    legend:{show:false},
     tooltip:{trigger:'axis',axisPointer:{type:'cross'},backgroundColor:'rgba(13,21,38,.92)',
       borderColor:'rgba(255,255,255,.1)',textStyle:{color:'#e0e8f8',fontSize:11},
       formatter:params=>{
+        const idx=params[0]?.dataIndex??0;
         const c=params.find(p=>p.seriesType==='candlestick');
         if(!c)return '';
         const [o,cl,l,h]=c.data;
-        const chg=((cl-o)/o*100).toFixed(2);
-        const clr=cl>=o?'#e8374a':'#18a361';
-        return `${c.axisValueLabel}<br>开 <b>${Number(o).toFixed(2)}</b> 收 <b style="color:${clr}">${Number(cl).toFixed(2)}</b>`
-             + `<br>高 <b style="color:#e8374a">${Number(h).toFixed(2)}</b> 低 <b style="color:#18a361">${Number(l).toFixed(2)}</b>`
-             + `<br>涨跌 <b style="color:${clr}">${chg>=0?'+':''}${chg}%</b>`;
+        const prevClose=idx>0?data[idx-1].c:o;
+        const chg=((cl-prevClose)/prevClose*100).toFixed(2);
+        const clr=cl>=prevClose?'#e8374a':'#18a361';
+        let html=`${c.axisValueLabel}<br>开 <b>${Number(o).toFixed(2)}</b> 收 <b style="color:${clr}">${Number(cl).toFixed(2)}</b>`
+               +`<br>高 <b style="color:#e8374a">${Number(h).toFixed(2)}</b> 低 <b style="color:#18a361">${Number(l).toFixed(2)}</b>`
+               +`<br>涨跌 <b style="color:${clr}">${Number(chg)>=0?'+':''}${chg}%</b>`;
+        params.filter(p=>p.seriesType==='line'&&p.seriesName.startsWith('MA')&&p.value!=null)
+          .forEach(p=>{html+=`<br>${p.seriesName} <b style="color:${p.color}">${p.value}</b>`;});
+        return html;
       }
     },
     axisPointer:{link:[{xAxisIndex:'all'}]},
@@ -677,6 +700,9 @@ function _klineCandle(data, period){
     series:[
       {type:'candlestick',data:ohlc,xAxisIndex:0,yAxisIndex:0,
        itemStyle:{color:'#e8374a',color0:'#18a361',borderColor:'#e8374a',borderColor0:'#18a361'}},
+      {type:'line',name:'MA5', data:calcMA(5), xAxisIndex:0,yAxisIndex:0,smooth:false,symbol:'none',connectNulls:false,lineStyle:{width:1,color:'#f5a623'}},
+      {type:'line',name:'MA10',data:calcMA(10),xAxisIndex:0,yAxisIndex:0,smooth:false,symbol:'none',connectNulls:false,lineStyle:{width:1,color:'#7ed321'}},
+      {type:'line',name:'MA20',data:calcMA(20),xAxisIndex:0,yAxisIndex:0,smooth:false,symbol:'none',connectNulls:false,lineStyle:{width:1,color:'#bd10e0'}},
       {type:'bar',data:vols,xAxisIndex:1,yAxisIndex:1,barMaxWidth:8}
     ]
   }, true);

@@ -31,8 +31,8 @@ stock-radar/
 │   ├── routes_boards.py   # GET /api/boards /api/boards/{type}/{name}/*
 │   └── routes_stocks.py   # GET/POST/DELETE /api/stocks/* /api/stocks/etf/* /api/stocks/{code}/kline
 └── templates/
-    ├── base.html          # Bootstrap 5 Navbar + 布局骨架 + 口令弹框 + K线弹框（全局）
-    ├── overview.html      # 首页：情绪条 + 指数 + 热力图 + 资金 + 涨停 + 龙虎榜
+    ├── base.html          # Bootstrap 5 Navbar + 布局骨架 + 口令弹框 + K线弹框（全局，导航栏不展示指数行情）
+    ├── overview.html      # 首页：指数卡片 + 市场情绪面板（涨跌家数/成交额/近60日历史图）+ 热力图 + 资金 + 涨停 + 龙虎榜
     ├── boards.html        # 板块列表（概念/行业 Tab）
     ├── board_detail.html  # 板块详情 + K 线（30/90/180/365日切换）+ 构成股
     ├── stocks.html        # 个股持仓 + 搜索
@@ -48,7 +48,7 @@ stock-radar/
 
 | 函数 | 用途 | 页面 |
 |------|------|------|
-| `fetch_indices()` | 大盘指数实时行情（价格、涨跌幅、开高低收、量额） | 首页指数卡片、导航栏实时指数 |
+| `fetch_indices()` | 大盘指数实时行情（价格、涨跌幅、开高低收、量额） | 首页指数卡片、情绪面板两市成交额合算 |
 | `fetch_quotes(codes)` | 个股/ETF 批量实时行情，100个/次 | 个股持仓、ETF 持仓、搜索结果 |
 
 **注意**：Sina hq 返回的名称字段会被截断（尤其深交所 ETF），需配合 suggest 接口覆盖完整名称。

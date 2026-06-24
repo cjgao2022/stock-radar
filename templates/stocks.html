@@ -15,11 +15,42 @@
   .range-bar-dot.down { background:var(--down); }
   .range-bar-dot.flat { background:#6c7a99; }
 
-  /* 量能条 */
-  .vol-bar-wrap { width:56px;height:5px;background:var(--border);border-radius:3px; }
-  .vol-bar-fill { height:5px;background:linear-gradient(90deg,var(--accent2),var(--accent));border-radius:3px; }
+  /* 量比条 */
+  .vr-bar-wrap { width:48px;height:4px;background:var(--border);border-radius:2px; }
+  .vr-bar-fill { height:4px;border-radius:2px;max-width:100%; }
+  .vr-bar-fill.normal { background:linear-gradient(90deg,var(--accent2),var(--accent)); }
+  .vr-bar-fill.active { background:linear-gradient(90deg,#f5a623,#e8374a); }
 
-  /* 搜索结果详情 */
+  /* 成本/盈亏 */
+  .pnl-pos { color:var(--up);  font-weight:700;font-variant-numeric:tabular-nums; }
+  .pnl-neg { color:var(--down);font-weight:700;font-variant-numeric:tabular-nums; }
+  .pnl-na  { color:var(--text3);font-size:.72rem;cursor:pointer;text-decoration:underline dotted; }
+  .pnl-na:hover { color:var(--accent); }
+  .cost-sub { font-size:.68rem;color:var(--text3);font-variant-numeric:tabular-nums; }
+
+  /* 成本编辑弹框 */
+  #cost-overlay {
+    display:none;position:fixed;inset:0;z-index:9998;
+    background:rgba(0,0,0,.5);backdrop-filter:blur(2px);
+    align-items:center;justify-content:center;
+  }
+  #cost-overlay.show { display:flex; }
+  .cost-box {
+    background:var(--card-bg);border:1px solid var(--border2);border-radius:14px;
+    padding:24px 24px 18px;width:300px;box-shadow:var(--shadow-md);
+    animation:cc-in .15s ease;
+  }
+  .cost-row { margin-bottom:12px; }
+  .cost-row label { font-size:.78rem;color:var(--text2);display:block;margin-bottom:4px; }
+  .cost-row input {
+    width:100%;padding:7px 10px;border-radius:7px;
+    border:1.5px solid var(--border2);background:var(--input-bg);
+    color:var(--text1);font-size:.92rem;font-family:var(--num);outline:none;
+    transition:border-color .15s;
+  }
+  .cost-row input:focus { border-color:var(--accent);background:var(--input-focus); }
+
+  /* 搜索结果 */
   .result-panel { border-radius:10px;border:1px solid var(--border);overflow:hidden; }
   .result-header { background:linear-gradient(90deg,var(--dark3),var(--dark2));padding:12px 16px;
     display:flex;justify-content:space-between;align-items:center; }
@@ -27,7 +58,11 @@
   .metric-label { font-size:.7rem;color:var(--text3);letter-spacing:.4px;margin-bottom:3px; }
   .metric-val   { font-size:1rem;font-weight:700;font-variant-numeric:tabular-nums; }
 
-  /* 亮色覆盖 */
+  /* 资金流面板 */
+  .flow-badge { display:inline-block;padding:1px 6px;border-radius:4px;font-size:.72rem;font-weight:700;font-variant-numeric:tabular-nums; }
+  .flow-badge.in  { background:rgba(232,55,74,.12);color:var(--up); }
+  .flow-badge.out { background:rgba(24,163,97,.12);color:var(--down); }
+
   [data-theme="light"] .result-header { background:#f7f9fc;border-bottom:1px solid var(--border);color:var(--text1); }
   [data-theme="light"] .result-body   { background:var(--card-bg); }
   [data-theme="light"] .metric-label  { color:var(--text3); }
@@ -62,9 +97,9 @@
   </div>
   <div class="col-6 col-md-3">
     <div class="stat-card">
-      <div class="sc-label">合计成交额</div>
-      <div class="sc-value num" id="stat-amount">--</div>
-      <div class="sc-sub">全部自选股</div>
+      <div class="sc-label">持仓总盈亏</div>
+      <div class="sc-value num" id="stat-pnl">--</div>
+      <div class="sc-sub" id="stat-pnl-sub">已设成本股</div>
     </div>
   </div>
 </div>
@@ -93,13 +128,38 @@
           <th class="text-end sortable" onclick="sortBy('change_abs')">涨跌额</th>
           <th class="text-center">日内区间</th>
           <th class="text-end sortable" onclick="sortBy('amount')">成交额</th>
-          <th class="text-center sortable" onclick="sortBy('amount')">量能</th>
-          <th class="text-center" style="white-space:nowrap">加入时间</th>
-          <th style="width:44px"></th>
+          <th class="text-center sortable" onclick="sortBy('vol_ratio')" title="今日量/20日均量">量比</th>
+          <th class="text-end sortable" onclick="sortBy('pnl_pct')" title="持仓盈亏（需设成本价）">持仓盈亏</th>
+          <th style="width:72px"></th>
         </tr>
       </thead>
       <tbody id="stock-tbody">
         <tr><td colspan="10" class="text-center text-muted py-4">加载中...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 主力资金净流入排行 -->
+<div class="panel mb-3">
+  <div class="panel-hd">
+    <div class="hd-title"><div class="accent-bar"></div>自选股主力资金净流入</div>
+    <span style="font-size:.72rem;color:var(--text3)">今日净流入（同花顺数据）</span>
+  </div>
+  <div class="panel-body-flush table-responsive">
+    <table class="data-table" id="flow-table">
+      <thead>
+        <tr>
+          <th>代码</th><th>名称</th>
+          <th class="text-end sortable" onclick="sortFlowBy('change_pct')">涨跌幅</th>
+          <th class="text-end sortable" onclick="sortFlowBy('main_net')">主力净流入</th>
+          <th class="text-end sortable" onclick="sortFlowBy('main_pct')">主力占比</th>
+          <th class="text-end sortable" onclick="sortFlowBy('big_net')">超大单净额</th>
+          <th class="text-end sortable" onclick="sortFlowBy('retail_net')">散户净额</th>
+        </tr>
+      </thead>
+      <tbody id="flow-tbody">
+        <tr><td colspan="7" class="text-center text-muted py-3" style="font-size:.82rem">加载中...</td></tr>
       </tbody>
     </table>
   </div>
@@ -124,6 +184,27 @@
   </div>
 </div>
 
+<!-- 成本价编辑弹框 -->
+<div id="cost-overlay">
+  <div class="cost-box">
+    <div class="cc-title" id="cost-title">设置成本价</div>
+    <div class="cc-desc" id="cost-desc" style="font-size:.78rem;color:var(--text2);margin-bottom:14px"></div>
+    <div class="cost-row">
+      <label>买入均价（元）</label>
+      <input type="number" id="cost-price-input" placeholder="如 120.50" step="0.01" min="0">
+    </div>
+    <div class="cost-row">
+      <label>持仓股数（可选，用于计算总盈亏）</label>
+      <input type="number" id="cost-shares-input" placeholder="如 1000" step="1" min="0">
+    </div>
+    <div class="cc-actions">
+      <button class="cc-btn-cancel" onclick="closeCostEditor()">取消</button>
+      <button class="cc-btn-cancel" style="color:var(--up);border-color:rgba(232,55,74,.3)" onclick="clearCost()">清除</button>
+      <button class="cc-btn-ok" onclick="saveCost()">保存</button>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -131,6 +212,9 @@
 .btn-rm { border:none;background:transparent;color:var(--text3);font-size:1rem;line-height:1;
   padding:2px 6px;border-radius:4px;cursor:pointer;transition:all .15s; }
 .btn-rm:hover { background:rgba(239,68,68,.15);color:#ef4444; }
+.btn-cost { border:none;background:transparent;color:var(--accent);font-size:.68rem;font-weight:700;
+  padding:2px 5px;border-radius:4px;cursor:pointer;transition:all .15s;margin-right:3px;letter-spacing:.3px; }
+.btn-cost:hover { background:rgba(61,126,252,.15); }
 .btn-add { border:1px solid var(--accent);background:transparent;color:var(--accent);
   font-size:.72rem;padding:2px 8px;border-radius:5px;cursor:pointer;white-space:nowrap;transition:all .15s; }
 .btn-add:hover { background:var(--accent);color:#fff; }
@@ -139,7 +223,11 @@
 </style>
 <script>
 let allData=[], maxAmount=1, watchlistCodes=new Set();
+let volStats={};       // {code: {ratio, avg_vol}}
+let flowData=[];       // 主力资金数据
 let sortState={key:'change_pct', desc:true};
+let flowSortState={key:'main_net', desc:true};
+let _costCode='', _costIsEtf=false;
 
 function fmtPct(v){ if(v==null)return'-'; return(v>0?'+':'')+Number(v).toFixed(2)+'%'; }
 function fmtAmt(v){
@@ -153,8 +241,54 @@ function fmtVol(v){
   if(v>=1e4)return(v/1e4).toFixed(1)+'万手';
   return v.toFixed(0)+'手';
 }
+function fmtMoney(v){
+  if(v==null)return'-';
+  const a=Math.abs(v);
+  if(a>=1e8)return(v>=0?'+':'')+( v/1e8).toFixed(2)+'亿';
+  if(a>=1e4)return(v>=0?'+':'')+(v/1e4).toFixed(0)+'万';
+  return(v>=0?'+':'')+v.toFixed(0);
+}
 function pctClass(v){ return v>0?'up':v<0?'down':'flat'; }
 function now(){ return new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Asia/Shanghai'}); }
+function escQ(s){ return s.replace(/'/g,"\\'"); }
+
+/* ── 成本编辑 ── */
+function openCostEditor(code, name, costPrice, shares){
+  _costCode=code;
+  document.getElementById('cost-title').textContent=`成本价 · ${name}`;
+  document.getElementById('cost-desc').textContent=`代码 ${code}，设置后实时计算持仓盈亏`;
+  document.getElementById('cost-price-input').value=costPrice!=null?costPrice:'';
+  document.getElementById('cost-shares-input').value=shares!=null?shares:'';
+  document.getElementById('cost-overlay').classList.add('show');
+  setTimeout(()=>document.getElementById('cost-price-input').focus(),80);
+}
+function closeCostEditor(){
+  document.getElementById('cost-overlay').classList.remove('show');
+  _costCode='';
+}
+async function saveCost(){
+  const cp=parseFloat(document.getElementById('cost-price-input').value)||null;
+  const sh=parseFloat(document.getElementById('cost-shares-input').value)||null;
+  if(!_costCode)return;
+  const url=_costIsEtf?`/api/stocks/etf/watchlist/${_costCode}/cost`:`/api/stocks/watchlist/${_costCode}/cost`;
+  await fetch(url,{method:'PATCH',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({cost_price:cp,shares:sh})});
+  closeCostEditor();
+  loadStocks();
+}
+async function clearCost(){
+  if(!_costCode)return;
+  const url=_costIsEtf?`/api/stocks/etf/watchlist/${_costCode}/cost`:`/api/stocks/watchlist/${_costCode}/cost`;
+  await fetch(url,{method:'PATCH',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({cost_price:null,shares:null})});
+  closeCostEditor();
+  loadStocks();
+}
+document.getElementById('cost-overlay').addEventListener('click',e=>{
+  if(e.target===e.currentTarget)closeCostEditor();
+});
+document.getElementById('cost-price-input').addEventListener('keydown',e=>{if(e.key==='Enter')saveCost();if(e.key==='Escape')closeCostEditor();});
+document.getElementById('cost-shares-input').addEventListener('keydown',e=>{if(e.key==='Enter')saveCost();if(e.key==='Escape')closeCostEditor();});
 
 /* ── 持仓操作 ── */
 function removeStock(code, btn){
@@ -177,6 +311,14 @@ function addStock(code, name, btn){
   });
 }
 
+/* ── 盈亏计算 ── */
+function calcPnl(d){
+  if(d.cost_price==null||d.price==null)return null;
+  const pct=(d.price-d.cost_price)/d.cost_price*100;
+  const amount=d.shares!=null?(d.price-d.cost_price)*d.shares:null;
+  return {pct, amount};
+}
+
 /* ── 持仓列表行 ── */
 function stockRow(d){
   const cls=pctClass(d.change_pct);
@@ -184,7 +326,36 @@ function stockRow(d){
   const chgAbs=d.price!=null&&d.prev_close!=null?d.price-d.prev_close:null;
   const rangeLen=(d.high&&d.low&&d.high>d.low)?d.high-d.low:0;
   const pos=rangeLen>0&&d.price!=null?Math.min(Math.max((d.price-d.low)/rangeLen,0),1):.5;
-  const volR=maxAmount>0?Math.min((d.amount||0)/maxAmount,1):0;
+
+  // 量比
+  const vs=volStats[d.code];
+  let volRatioHtml='<span class="text-muted" style="font-size:.72rem">--</span>';
+  if(vs){
+    const r=vs.ratio;
+    const barW=Math.min(r/3,1)*100;
+    const barCls=r>=1.5?'active':'normal';
+    const rColor=r>=2?'#e8374a':r>=1.5?'#f5a623':'var(--text2)';
+    volRatioHtml=`<div style="display:flex;flex-direction:column;align-items:center;gap:3px">
+      <span class="num" style="font-size:.72rem;color:${rColor};font-weight:700">${r.toFixed(2)}x</span>
+      <div class="vr-bar-wrap"><div class="vr-bar-fill ${barCls}" style="width:${barW}%"></div></div>
+    </div>`;
+  }
+
+  // 盈亏
+  const pnl=calcPnl(d);
+  let pnlHtml;
+  if(pnl){
+    const pc=pnl.pct>=0?'pnl-pos':'pnl-neg';
+    pnlHtml=`<div class="${pc}" style="font-size:.82rem">${pnl.pct>=0?'+':''}${pnl.pct.toFixed(2)}%</div>`;
+    if(pnl.amount!=null){
+      const apc=pnl.amount>=0?'pnl-pos':'pnl-neg';
+      pnlHtml+=`<div class="${apc} cost-sub">${fmtMoney(pnl.amount)}</div>`;
+    }
+    pnlHtml+=`<div class="cost-sub">成本 ${Number(d.cost_price).toFixed(2)}</div>`;
+  } else {
+    pnlHtml=`<span class="pnl-na" onclick="openCostEditor('${d.code}','${escQ(d.name||d.code)}',null,null)">设成本</span>`;
+  }
+
   return `<tr class="${rowCls}">
     <td class="num" style="font-size:.78rem;color:var(--text3)">${d.code||'-'}</td>
     <td><span class="fw-bold" style="font-size:.9rem">${d.name||d.code}</span></td>
@@ -199,15 +370,11 @@ function stockRow(d){
       </div>
     </td>
     <td class="text-end num" style="font-size:.82rem;color:var(--text2)">${fmtAmt(d.amount)}</td>
-    <td class="text-center">
-      <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
-        <span class="num" style="font-size:.72rem;color:var(--text2)">${fmtVol(d.volume)}</span>
-        <div class="vol-bar-wrap"><div class="vol-bar-fill" style="width:${Math.round(volR*100)}%"></div></div>
-      </div>
-    </td>
-    <td class="text-center num" style="font-size:.72rem;color:var(--text3);white-space:nowrap">${d.added_at||'-'}</td>
+    <td class="text-center">${volRatioHtml}</td>
+    <td class="text-end">${pnlHtml}</td>
     <td class="text-center" style="white-space:nowrap">
       <button class="btn-kline" onclick="openKlineModal('${d.code}','${escQ(d.name||d.code)}',false)" title="K线">K线</button>
+      <button class="btn-cost" onclick="openCostEditor('${d.code}','${escQ(d.name||d.code)}',${d.cost_price??'null'},${d.shares??'null'})" title="设置成本">✏</button>
       <button class="btn-rm" onclick="removeStock('${d.code}',this)" title="移除持仓">×</button>
     </td>
   </tr>`;
@@ -220,6 +387,8 @@ function sortBy(key){
 }
 function getSortVal(d,key){
   if(key==='change_abs')return d.price!=null&&d.prev_close!=null?d.price-d.prev_close:-Infinity;
+  if(key==='vol_ratio')return volStats[d.code]?.ratio??-1;
+  if(key==='pnl_pct'){const p=calcPnl(d);return p!=null?p.pct:-Infinity;}
   return d[key]??-Infinity;
 }
 function filterRows(){ renderTable(); }
@@ -242,7 +411,33 @@ function updateStats(data){
   document.getElementById('stat-up-pct').textContent=up.length?`均涨 +${avgUp}%`:'无';
   document.getElementById('stat-down').textContent=dn.length;
   document.getElementById('stat-down-pct').textContent=dn.length?`均跌 ${avgDn}%`:'无';
-  document.getElementById('stat-amount').textContent=fmtAmt(totalAmt);
+
+  // 总盈亏
+  const pnlList=data.map(d=>calcPnl(d)).filter(Boolean);
+  const withCost=data.filter(d=>d.cost_price!=null);
+  if(withCost.length){
+    const totalAmt2=withCost.reduce((s,d)=>{
+      const p=calcPnl(d);
+      return p?.amount!=null?s+p.amount:s;
+    },0);
+    const hasMoney=withCost.some(d=>d.shares!=null);
+    if(hasMoney){
+      const el=document.getElementById('stat-pnl');
+      el.textContent=fmtMoney(totalAmt2);
+      el.className='sc-value num '+(totalAmt2>=0?'up':'down');
+      document.getElementById('stat-pnl-sub').textContent=`${withCost.filter(d=>d.shares!=null).length}只有股数`;
+    } else {
+      const avgPnl=pnlList.reduce((s,p)=>s+p.pct,0)/pnlList.length;
+      const el=document.getElementById('stat-pnl');
+      el.textContent=(avgPnl>=0?'+':'')+avgPnl.toFixed(2)+'%';
+      el.className='sc-value num '+(avgPnl>=0?'up':'down');
+      document.getElementById('stat-pnl-sub').textContent=`${pnlList.length}只均盈亏`;
+    }
+  } else {
+    document.getElementById('stat-pnl').textContent='--';
+    document.getElementById('stat-pnl').className='sc-value num';
+    document.getElementById('stat-pnl-sub').textContent='未设成本';
+  }
 }
 
 function loadStocks(){
@@ -259,6 +454,59 @@ function loadStocks(){
 loadStocks();
 setInterval(loadStocks,60000);
 
+/* ── 量比加载（异步，不阻塞主表） ── */
+function loadVolStats(){
+  fetch('/api/stocks/vol_stats').then(r=>r.json()).then(data=>{
+    volStats=data||{};
+    renderTable();
+  }).catch(()=>{});
+}
+loadVolStats();
+setInterval(loadVolStats,300000);
+
+/* ── 主力资金流排行 ── */
+function sortFlowBy(key){
+  if(flowSortState.key===key)flowSortState.desc=!flowSortState.desc;
+  else{flowSortState.key=key;flowSortState.desc=true;}
+  renderFlowTable();
+}
+function renderFlowTable(){
+  const rows=[...flowData].sort((a,b)=>{
+    const av=a[flowSortState.key]??-Infinity,bv=b[flowSortState.key]??-Infinity;
+    return flowSortState.desc?bv-av:av-bv;
+  });
+  const tbody=document.getElementById('flow-tbody');
+  if(!rows.length){
+    tbody.innerHTML='<tr><td colspan="7" class="text-center text-muted py-3" style="font-size:.82rem">暂无数据（交易日盘中/盘后可用）</td></tr>';
+    return;
+  }
+  tbody.innerHTML=rows.map(d=>{
+    const cls=pctClass(d.change_pct);
+    const mc=d.main_net>=0?'in':'out';
+    const bc=d.big_net>=0?'in':'out';
+    const rc=d.retail_net>=0?'in':'out';
+    return `<tr>
+      <td class="num" style="font-size:.78rem;color:var(--text3)">${d.code||'-'}</td>
+      <td class="fw-bold">${d.name||'-'}</td>
+      <td class="text-end"><span class="chg-badge ${cls}">${fmtPct(d.change_pct)}</span></td>
+      <td class="text-end"><span class="flow-badge ${mc}">${fmtMoney(d.main_net)}</span></td>
+      <td class="text-end num" style="font-size:.8rem;color:var(--text2)">${d.main_pct!=null?Number(d.main_pct).toFixed(2)+'%':'-'}</td>
+      <td class="text-end"><span class="flow-badge ${bc}">${fmtMoney(d.big_net)}</span></td>
+      <td class="text-end"><span class="flow-badge ${rc}">${fmtMoney(d.retail_net)}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function loadFlowRank(){
+  fetch('/api/stocks/flow_rank').then(r=>r.json()).then(data=>{
+    flowData=Array.isArray(data)?data.filter(d=>!d.error):[];
+    renderFlowTable();
+  }).catch(()=>{
+    document.getElementById('flow-tbody').innerHTML='<tr><td colspan="7" class="text-center text-muted py-3" style="font-size:.82rem">加载失败</td></tr>';
+  });
+}
+loadFlowRank();
+
 document.getElementById('search-input').addEventListener('keydown',e=>{if(e.key==='Enter')doSearch();});
 
 /* ── 搜索结果渲染 ── */
@@ -267,7 +515,6 @@ function addBtn(code, name){
     ?`<button class="btn-add in-wl" disabled>✓ 已持仓</button>`
     :`<button class="btn-add" onclick="addStock('${code}','${escQ(name)}',this)">＋ 加入持仓</button>`;
 }
-function escQ(s){ return s.replace(/'/g,"\\'"); }
 
 function renderDetailCard(d){
   const cls=pctClass(d.change_pct);

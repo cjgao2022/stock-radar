@@ -61,6 +61,18 @@ def add_stock(code: str, name: str) -> bool:
         return True
 
 
+def update_stock_cost(code: str, cost_price: float | None, shares: float | None) -> bool:
+    with _LOCK:
+        data = _load()
+        for s in data["stocks"]:
+            if s["code"] == code:
+                s["cost_price"] = cost_price
+                s["shares"] = shares
+                _save(data)
+                return True
+        return False
+
+
 def remove_stock(code: str) -> bool:
     with _LOCK:
         data = _load()
@@ -87,6 +99,18 @@ def add_etf(code: str, name: str, etf_type: str = "") -> bool:
         data["etfs"].append({"code": code, "name": name, "etf_type": etf_type, "added_at": _now_cst()})
         _save(data)
         return True
+
+
+def update_etf_cost(code: str, cost_price: float | None, shares: float | None) -> bool:
+    with _LOCK:
+        data = _load()
+        for e in data["etfs"]:
+            if e["code"] == code:
+                e["cost_price"] = cost_price
+                e["shares"] = shares
+                _save(data)
+                return True
+        return False
 
 
 def remove_etf(code: str) -> bool:

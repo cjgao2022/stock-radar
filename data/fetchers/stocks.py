@@ -70,13 +70,15 @@ def fetch_watchlist() -> list[dict]:
     from data.watchlist_store import get_stocks
     items = get_stocks()
     codes = [item["code"] for item in items]
-    name_map = {item["code"]: item["name"] for item in items}
+    meta = {item["code"]: item for item in items}
     quotes = fetch_quotes(codes)
     for q in quotes:
-        item = {i["code"]: i for i in items}.get(q["code"], {})
-        if item.get("name"):
-            q["name"] = item["name"]
-        q["added_at"] = item.get("added_at", "")
+        m = meta.get(q["code"], {})
+        if m.get("name"):
+            q["name"] = m["name"]
+        q["added_at"] = m.get("added_at", "")
+        q["cost_price"] = m.get("cost_price")
+        q["shares"] = m.get("shares")
     return quotes
 
 
@@ -93,6 +95,8 @@ def fetch_etf_watchlist() -> list[dict]:
             q["name"] = m["name"]
         q["etf_type"] = m.get("etf_type", "")
         q["added_at"] = m.get("added_at", "")
+        q["cost_price"] = m.get("cost_price")
+        q["shares"] = m.get("shares")
     return quotes
 
 
@@ -234,7 +238,9 @@ def fetch_stock_kline(code: str, period: str) -> dict:
             for d in items
             if d["day"][:10] == latest_date and "09:30" <= d["day"][11:16] <= "15:00"
         ]
-        return {"type": "line", "data": filtered, "date": latest_date}
+        prev_items = [d for d in items if d["day"][:10] < latest_date and d.get("close")]
+        prev_close = round(float(prev_items[-1]["close"]), 2) if prev_items else None
+        return {"type": "line", "data": filtered, "date": latest_date, "prev_close": prev_close}
 
     if period in ("monthly", "yearly"):
         import pandas as pd

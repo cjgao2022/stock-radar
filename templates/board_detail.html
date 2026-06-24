@@ -58,9 +58,14 @@
           <div class="sr-item"><div class="sr-label">净流入</div><div class="sr-val" id="sr-net">--</div></div>
           <div class="sr-item"><div class="sr-label">公司家数</div><div class="sr-val" id="sr-cnt">--</div></div>
         </div>
-        <div>
+        <div class="mb-3">
           <div style="font-size:.72rem;color:var(--text3);margin-bottom:4px">领涨股</div>
           <div id="top-stock" style="font-size:.95rem;font-weight:700">--</div>
+        </div>
+        <!-- 近5日动量 -->
+        <div>
+          <div style="font-size:.72rem;color:var(--text3);margin-bottom:6px">近5日涨跌</div>
+          <div id="momentum-row" class="d-flex gap-1" style="flex-wrap:wrap"></div>
         </div>
       </div>
     </div>
@@ -128,6 +133,25 @@ function loadKline(days){
       const cls    = chgPct>0?'up':chgPct<0?'down':'flat';
       document.getElementById('kline-chg').innerHTML =
         `<span class="${cls} num fw-bold">${chgPct>0?'+':''}${chgPct}%</span>`;
+
+      // 近5日动量色块
+      if(rows.length>=2){
+        const recent=rows.slice(-5);
+        const momRow=document.getElementById('momentum-row');
+        momRow.innerHTML=recent.map(r=>{
+          const prev=rows[rows.indexOf(r)-1];
+          const chg=prev?((r.close-prev.close)/prev.close*100):null;
+          const cls=chg==null?'flat':chg>0?'up':chg<0?'down':'flat';
+          const bg=chg==null?'rgba(255,255,255,.08)'
+            :chg>0?`rgba(232,55,74,${Math.min(Math.abs(chg)/5,1)*.6+.15})`
+            :`rgba(24,163,97,${Math.min(Math.abs(chg)/5,1)*.6+.15})`;
+          const txt=chg!=null?(chg>=0?'+':'')+chg.toFixed(2)+'%':'--';
+          return `<div style="flex:1;min-width:48px;text-align:center;padding:6px 4px;border-radius:6px;background:${bg}">
+            <div style="font-size:.65rem;color:var(--text3);margin-bottom:2px">${r.date.slice(5)}</div>
+            <div class="${cls} num" style="font-size:.78rem;font-weight:700">${txt}</div>
+          </div>`;
+        }).join('');
+      }
 
       klineChart.setOption({
         backgroundColor:'transparent',

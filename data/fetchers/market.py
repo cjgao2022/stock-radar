@@ -63,15 +63,22 @@ def fetch_market_breadth() -> dict:
         return {'error': str(e)}
 
 
-def fetch_lhb_today() -> list[dict]:
-    """今日龙虎榜（上榜原因 + 净买额）"""
+def fetch_lhb_today(date_str: str = "") -> list[dict]:
+    """今日龙虎榜（上榜原因 + 净买额）
+    date_str: YYYYMMDD，默认今日；传历史日期可查历史
+    """
     try:
-        today = datetime.now(_CST).strftime('%Y%m%d')
+        if not date_str:
+            date_str = datetime.now(_CST).strftime('%Y%m%d')
         with _AK_LOCK:
-            df = ak.stock_lhb_detail_em(start_date=today, end_date=today)
-        today_str = datetime.now(_CST).strftime('%Y-%m-%d')
-        df = df[df['上榜日'].astype(str).str[:10] == today_str]
-        # 同一只股票可能有多行（多个上榜原因），先聚合原因再去重
+            df = ak.stock_lhb_detail_em(start_date=date_str, end_date=date_str)
+        if df is None or df.empty:
+            return []
+        target = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:]}"
+        if '上榜日' in df.columns:
+            df = df[df['上榜日'].astype(str).str[:10] == target]
+        if df.empty:
+            return []
         reason_map = (
             df.groupby('代码')['上榜原因']
             .apply(lambda x: ' / '.join(x.dropna().unique()))
@@ -83,10 +90,17 @@ def fetch_lhb_today() -> list[dict]:
             '代码': 'code', '名称': 'name', '收盘价': 'price',
             '涨跌幅': 'change_pct', '龙虎榜净买额': 'net_buy',
             '换手率': 'turnover', '流通市值': 'free_mkt_cap',
+            '上榜原因': 'reason',
         }
         df = df.rename(columns=rename)
-        keep = [c for c in ['code', 'name', 'price', 'change_pct', 'net_buy', 'turnover', 'free_mkt_cap'] if c in df.columns]
-        df = df[keep].sort_values('net_buy', ascending=False)
+        keep = [c for c in ['code', 'name', 'price', 'change_pct', 'net_buy',
+                             'turnover', 'free_mkt_cap', 'reason'] if c in df.columns]
+        df = df[keep]
+        if 'net_buy' in df.columns:
+            df = df.sort_values('net_buy', ascending=False)
         return df.head(20).to_dict(orient='records')
+    except TypeError:
+        # AKShare 在无数据时（非交易日/数据未就绪）返回 result=null 触发 TypeError
+        return []
     except Exception as e:
         return [{'error': str(e)}]

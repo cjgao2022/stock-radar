@@ -67,6 +67,60 @@ def fetch_stock_flow(code: str, market: str) -> list[dict]:
 
 
 
+def _rmb_to_yuan(s) -> float | None:
+    """将 '亿'/'万' 字符串转为元（如 '16.15亿' → 1615000000）"""
+    if s is None:
+        return None
+    s = str(s).strip()
+    if s in ("-", "", "nan", "None"):
+        return None
+    try:
+        if "亿" in s:
+            return float(s.replace("亿", "").replace(",", "")) * 1e8
+        if "万" in s:
+            return float(s.replace("万", "").replace(",", "")) * 1e4
+        return float(s.replace(",", ""))
+    except Exception:
+        return None
+
+
+def _pct_to_float(s) -> float | None:
+    """将 '12.34%' 字符串转为 12.34"""
+    if s is None:
+        return None
+    try:
+        return float(str(s).replace("%", "").replace(",", "").strip())
+    except Exception:
+        return None
+
+
+def fetch_stock_flow_rank_all(indicator: str = "今日") -> list[dict]:
+    """全市场个股主力资金净流入排行（同花顺 stock_fund_flow_individual）
+    返回字段：code, name, price, change_pct(float), main_net(元), inflow(元), outflow(元)
+    注：THS 此接口不区分超大单/散户，big_net/retail_net 返回 None
+    """
+    try:
+        with _AK_LOCK:
+            df = ak.stock_fund_flow_individual(symbol="即时")
+        rows = df.to_dict(orient="records")
+        result = []
+        for r in rows:
+            code = str(r.get("股票代码", r.get("代码", ""))).zfill(6)
+            result.append({
+                "code": code,
+                "name": r.get("股票简称", r.get("名称", "")),
+                "price": r.get("最新价"),
+                "change_pct": _pct_to_float(r.get("涨跌幅")),
+                "main_net": _rmb_to_yuan(r.get("净额")),
+                "main_pct": _pct_to_float(r.get("净占比")),
+                "big_net": None,
+                "retail_net": None,
+            })
+        return sorted(result, key=lambda x: x.get("main_net") or -1e18, reverse=True)
+    except Exception as e:
+        return [{"error": str(e)}]
+
+
 def fetch_market_flow() -> list[dict]:
     """大盘资金流向（东方财富，THS 无等价接口）"""
     try:
