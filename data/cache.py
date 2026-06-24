@@ -72,7 +72,8 @@ def init_db() -> None:
                 zt INTEGER,
                 dt INTEGER,
                 total INTEGER,
-                activity REAL
+                activity REAL,
+                amount REAL
             );
             CREATE TABLE IF NOT EXISTS zt_history (
                 date TEXT NOT NULL,
@@ -97,6 +98,11 @@ def init_db() -> None:
                 PRIMARY KEY (date, code)
             );
         """)
+        # 迁移：为已有数据库补 amount 列
+        try:
+            c.execute("ALTER TABLE market_breadth_history ADD COLUMN amount REAL DEFAULT NULL")
+        except sqlite3.OperationalError:
+            pass  # 列已存在，忽略
 
 
 def save_board_snapshot(date: str, board_type: str, rows: list[dict]) -> None:
@@ -149,10 +155,11 @@ def save_breadth_history(date: str, data: dict) -> None:
     with _conn() as c:
         c.execute(
             """INSERT OR REPLACE INTO market_breadth_history
-               (date, up, down, flat, zt, dt, total, activity)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+               (date, up, down, flat, zt, dt, total, activity, amount)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (date, data.get("up"), data.get("down"), data.get("flat"),
-             data.get("zt"), data.get("dt"), data.get("total"), data.get("activity")),
+             data.get("zt"), data.get("dt"), data.get("total"), data.get("activity"),
+             data.get("amount")),
         )
 
 

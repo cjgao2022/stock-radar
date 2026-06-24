@@ -350,9 +350,13 @@ function renderBreadthHist(data){
   const upArr=data.map(d=>d.up||null);
   const dnArr=data.map(d=>d.down||null);
   const ztArr=data.map(d=>d.zt||0);
+  const amtArr=data.map(d=>d.amount!=null?+(d.amount/1e8).toFixed(0):null);
   const hasFullCount=data.some(d=>d.up>0);
-  document.getElementById('breadth-hist-note').textContent=
-    hasFullCount?'涨停（橙线）/ 上涨（红柱）/ 下跌（绿柱）家数':'涨停数（近60日，点击补齐历史）';
+  const hasAmount=amtArr.some(v=>v!=null);
+  const noteStr=hasFullCount
+    ?'涨停（橙）/ 上涨（红）/ 下跌（绿）'+(hasAmount?' / 成交额（蓝）':'')
+    :'涨停数（近60日，点击补齐历史）';
+  document.getElementById('breadth-hist-note').textContent=noteStr;
   breadthHistChart.setOption({
     backgroundColor:'transparent',animation:false,
     tooltip:{trigger:'axis',backgroundColor:'rgba(13,21,38,.92)',borderColor:'rgba(255,255,255,.1)',
@@ -362,10 +366,12 @@ function renderBreadthHist(data){
         const ztP=params.find(p=>p.seriesName==='涨停');
         const upP=params.find(p=>p.seriesName==='上涨');
         const dnP=params.find(p=>p.seriesName==='下跌');
+        const amtP=params.find(p=>p.seriesName==='成交额');
         let s=`${date}<br>`;
         if(upP?.value!=null) s+=`上涨 <b style="color:#f08090">${upP.value}</b> `;
         if(dnP?.value!=null) s+=`下跌 <b style="color:#56c98e">${Math.abs(dnP.value)}</b> `;
         if(ztP) s+=`涨停 <b style="color:#f5a623">${ztP.value}</b>`;
+        if(amtP?.value!=null) s+=`<br>成交额 <b style="color:#7eb8f7">${amtP.value}亿</b>`;
         return s;
       }
     },
@@ -374,12 +380,14 @@ function renderBreadthHist(data){
       axisLine:{lineStyle:{color:'#2a3550'}},splitLine:{show:false}},
     yAxis:[
       {type:'value',axisLabel:{color:'#5a6a8a',fontSize:9},splitLine:{lineStyle:{color:'#1e2c48',type:'dashed'}}},
-      {type:'value',axisLabel:{color:'#8a7050',fontSize:9},splitLine:{show:false}}
+      {type:'value',axisLabel:{color:'#8a7050',fontSize:9},splitLine:{show:false}},
+      {show:false,type:'value',splitLine:{show:false}}
     ],
     series:[
       {type:'bar',data:upArr,stack:'breadth',name:'上涨',itemStyle:{color:'rgba(232,55,74,.55)'},barMaxWidth:10},
       {type:'bar',data:dnArr.map(v=>v!=null?-v:null),stack:'breadth',name:'下跌',itemStyle:{color:'rgba(24,163,97,.55)'},barMaxWidth:10},
-      {type:'line',data:ztArr,name:'涨停',yAxisIndex:1,symbol:'none',lineStyle:{width:2,color:'#f5a623'},z:5}
+      {type:'line',data:ztArr,name:'涨停',yAxisIndex:1,symbol:'none',lineStyle:{width:2,color:'#f5a623'},z:5},
+      {type:'line',data:amtArr,name:'成交额',yAxisIndex:2,symbol:'none',lineStyle:{width:1.5,color:'#7eb8f7'},z:4,areaStyle:{color:'rgba(126,184,247,.08)'}}
     ]
   });
 }

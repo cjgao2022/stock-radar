@@ -29,13 +29,22 @@ def refresh_board_snapshots() -> None:
 
 def save_breadth_snapshot() -> None:
     from data.fetchers.market import fetch_market_breadth
+    from data.fetchers.indices import fetch_indices
     from data.cache import save_breadth_history
 
     date = _today()
     data = fetch_market_breadth()
     if "error" not in data:
-        save_breadth_history(date, data)
-        print(f"[scheduler] {date} 市场情绪快照已保存 up={data.get('up')} down={data.get('down')}")
+        indices = fetch_indices()
+        amount = None
+        if isinstance(indices, list):
+            amount = sum(
+                d.get("amount", 0) for d in indices
+                if any(k in d.get("name", "") for k in ("上证", "深证"))
+                and (d.get("amount") or 0) > 0
+            ) or None
+        save_breadth_history(date, {**data, "amount": amount})
+        print(f"[scheduler] {date} 市场情绪快照已保存 up={data.get('up')} down={data.get('down')} amount={amount}")
     else:
         print(f"[scheduler] {date} 市场情绪快照失败: {data}")
 

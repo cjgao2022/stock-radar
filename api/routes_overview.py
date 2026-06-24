@@ -51,7 +51,15 @@ def api_zt():
 def api_market_breadth():
     data = get_cached("market_breadth", 300, fetch_market_breadth)  # 全量拉取耗时~20s，5分钟缓存
     if isinstance(data, dict) and "error" not in data:
-        save_breadth_history(_today(), data)
+        indices = get_cached("indices", 60, fetch_indices)
+        amount = None
+        if isinstance(indices, list):
+            amount = sum(
+                d.get("amount", 0) for d in indices
+                if any(k in d.get("name", "") for k in ("上证", "深证"))
+                and (d.get("amount") or 0) > 0
+            ) or None
+        save_breadth_history(_today(), {**data, "amount": amount})
     return data
 
 
