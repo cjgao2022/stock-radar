@@ -172,6 +172,17 @@
       <div id="breadth-hist-chart" style="height:100%;width:100%;min-height:150px"></div>
     </div>
   </div>
+  <!-- 估值状态条 -->
+  <div id="val-strip" style="padding:5px 14px;border-top:1px solid var(--border);font-size:.75rem;color:var(--text2);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <span>全A PE <b id="vs-pe" style="font-family:var(--num);color:var(--text1)">--</b></span>
+    <span style="color:var(--border2)">|</span>
+    <span>近10年 <b id="vs-pct" style="font-family:var(--num)">--</b></span>
+    <span style="color:var(--border2)">|</span>
+    <span>ERP <b id="vs-erp" style="font-family:var(--num)">--</b></span>
+    <span style="color:var(--border2)">|</span>
+    <b id="vs-label">--</b>
+    <a href="/macro" style="margin-left:auto;font-size:.7rem;color:var(--accent);text-decoration:none;white-space:nowrap">估值详情 →</a>
+  </div>
 </div>
 
 <!-- ③ 热力图 + 右侧面板 -->
@@ -638,5 +649,22 @@ fetch('/api/market/zt_history').then(r=>r.json()).then(resp=>{
 
 window.addEventListener('resize',()=>heatmap.resize());
 new ResizeObserver(()=>heatmap.resize()).observe(document.getElementById('heatmap'));
+
+/* ── 估值状态条（首页底部 strip） ── */
+fetch('/api/macro/valuation').then(r=>r.json()).then(d=>{
+  if (!d || d.error) return;
+  const GREEN='#18a361', RED='#e8374a', ORANGE='#f5a623';
+  const c = d.label_color==='green'?GREEN : d.label_color==='red'?RED : ORANGE;
+  document.getElementById('vs-pe').textContent = d.pe!=null ? d.pe.toFixed(1)+'x' : '--';
+  const pctEl=document.getElementById('vs-pct');
+  pctEl.textContent = d.pe_10y_pct!=null ? d.pe_10y_pct+'% 分位' : '--';
+  pctEl.style.color = c;
+  const erpEl=document.getElementById('vs-erp');
+  erpEl.textContent = d.erp!=null ? (d.erp>=0?'+':'')+d.erp.toFixed(2)+'%' : '--';
+  erpEl.style.color = d.erp>0 ? GREEN : d.erp<0 ? RED : '';
+  const lblEl=document.getElementById('vs-label');
+  lblEl.textContent = d.label || '';
+  lblEl.style.color = c;
+}).catch(()=>{});
 </script>
 {% endblock %}

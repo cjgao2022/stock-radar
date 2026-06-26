@@ -34,10 +34,15 @@ def api_board_list(board_type: str = "concept", sort: str = "change_pct", order:
 
 
 @router.get("/{board_type}/{board_name}/kline")
-def api_board_kline(board_type: str, board_name: str, days: int = 30):
+def api_board_kline(board_type: str, board_name: str, days: int = 30, period: str = "daily"):
     date = _today()
-    return get_cached(f"kline_{board_type}_{board_name}_{days}_{date}", _TTL,
-                      lambda: fetch_board_kline(board_type, board_name, days))
+    if period in ("monthly", "yearly"):
+        key = f"kline_{board_type}_{board_name}_{period}_{date}"
+        ttl = 3600
+    else:
+        key = f"kline_{board_type}_{board_name}_{days}_{date}"
+        ttl = _TTL
+    return get_cached(key, ttl, lambda: fetch_board_kline(board_type, board_name, days, period))
 
 
 @router.get("/{board_type}/{board_name}/constituents")

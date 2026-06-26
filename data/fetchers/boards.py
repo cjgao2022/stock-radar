@@ -70,23 +70,53 @@ def _sina_prefix(code: str) -> str:
     return "sh" if code.startswith(("6", "9")) else "sz"
 
 
-def fetch_board_kline(board_type: str, board_name: str, days: int = 30) -> list[dict]:
-    """板块指数近 N 日 K 线（THS）"""
+def fetch_board_kline(board_type: str, board_name: str, days: int = 30, period: str = "daily") -> list[dict]:
+    """板块指数 K 线（THS）。period: 'daily'(按days天) | 'monthly'(1500日resample) | 'yearly'(1800日resample)"""
+    import pandas as pd
     from datetime import datetime, timedelta, timezone
     _BEIJING = timezone(timedelta(hours=8))
     now = datetime.now(_BEIJING)
     today = now.strftime("%Y%m%d")
-    start = (now - timedelta(days=days)).strftime("%Y%m%d")
+    fetch_days = 1500 if period == "monthly" else (1800 if period == "yearly" else days)
+    start = (now - timedelta(days=fetch_days)).strftime("%Y%m%d")
     try:
         with _AK_LOCK:
             if board_type == "industry":
                 df = ak.stock_board_industry_index_ths(symbol=board_name, start_date=start, end_date=today)
             else:
                 df = ak.stock_board_concept_index_ths(symbol=board_name, start_date=start, end_date=today)
-        rename = {"日期": "date", "开盘价": "open", "最高价": "high", "最低价": "low", "收盘价": "close", "成交量": "volume", "成交额": "amount"}
+        rename = {"日期": "date", "开盘价": "open", "最高价": "high", "最低价": "low",
+                  "收盘价": "close", "成交量": "volume", "成交额": "amount"}
         df = df.rename(columns=rename)
-        df["date"] = df["date"].astype(str)
-        return df.to_dict(orient="records")
+        if period not in ("monthly", "yearly"):
+            df["date"] = df["date"].astype(str)
+            return df.to_dict(orient="records")
+        # 月K / 年K：对日线做 resample
+        df["date"] = pd.to_datetime(df["date"])
+        df = df.set_index("date")
+        for col in ("open", "high", "low", "close"):
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+        for col in ("volume", "amount"):
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+        agg_dict: dict = {}
+        if "open"   in df.columns: agg_dict["open"]   = "first"
+        if "high"   in df.columns: agg_dict["high"]   = "max"
+        if "low"    in df.columns: agg_dict["low"]    = "min"
+        if "close"  in df.columns: agg_dict["close"]  = "last"
+        if "volume" in df.columns: agg_dict["volume"] = "sum"
+        if "amount" in df.columns: agg_dict["amount"] = "sum"
+        freq = "ME" if period == "monthly" else "YE"
+        try:
+            resampled = df.resample(freq).agg(agg_dict).dropna(subset=["close"])
+        except ValueError:
+            freq = "M" if period == "monthly" else "Y"
+            resampled = df.resample(freq).agg(agg_dict).dropna(subset=["close"])
+        fmt = "%Y-%m" if period == "monthly" else "%Y"
+        resampled.index = resampled.index.strftime(fmt)
+        resampled.index.name = "date"
+        return resampled.reset_index().to_dict(orient="records")
     except Exception as e:
         return [{"error": str(e)}]
 

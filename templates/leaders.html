@@ -70,6 +70,16 @@
   @keyframes spin { to { transform:rotate(360deg); } }
 
   [data-theme="light"] .ind-card-hd { background:#f7f9fc; border-bottom:1px solid var(--border); }
+
+  /* Tab 切换 */
+  .tab-bar { display:flex; gap:4px; margin-bottom:10px; }
+  .tab-btn {
+    padding:4px 16px; border-radius:14px; font-size:.78rem; font-weight:600;
+    border:1.5px solid var(--border2); background:transparent; color:var(--text2); cursor:pointer;
+    transition:all .15s;
+  }
+  .tab-btn.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .tab-btn:hover:not(.active) { border-color:var(--accent); color:var(--accent); }
 </style>
 {% endblock %}
 
@@ -77,10 +87,15 @@
 
 <div class="panel mb-2">
   <div class="panel-hd">
-    <div class="hd-title"><div class="accent-bar"></div>申万一级行业龙头（成交额 TOP5）</div>
-    <span id="leaders-hint" style="font-size:.72rem;color:rgba(255,255,255,.4)">加载中，首次约60秒，之后30分钟缓存</span>
+    <div class="hd-title"><div class="accent-bar"></div><span id="panel-title">申万一级行业龙头（成交额 TOP5）</span></div>
+    <span id="leaders-hint" style="font-size:.72rem;color:var(--text2)">加载中，首次约60秒，之后30分钟缓存</span>
   </div>
   <div class="panel-body" style="padding:10px 12px">
+
+    <div class="tab-bar">
+      <button class="tab-btn active" id="tab-l1" onclick="switchTab('l1')">一级行业</button>
+      <button class="tab-btn"        id="tab-l2" onclick="switchTab('l2')">二级行业</button>
+    </div>
 
     <div class="sort-bar">
       <span style="font-size:.76rem;color:var(--text2)">排序：</span>
@@ -103,7 +118,10 @@
 
 {% block scripts %}
 <script>
-let _leadersData = [];
+let _l1Data = [];
+let _l2Data = null;      // null = 未加载
+let _l2Loading = false;
+let _activeTab = 'l1';
 let _sortKey = 'chg';
 
 function chgClass(v) {
@@ -122,7 +140,74 @@ function sortBy(key) {
   _sortKey = key;
   document.querySelectorAll('.sort-btn').forEach(el => el.classList.remove('active'));
   document.getElementById(`sort-${key}`).classList.add('active');
-  renderLeaders(_leadersData);
+  renderCurrent();
+}
+
+function renderCurrent() {
+  if (_activeTab === 'l1') renderLeaders(_l1Data);
+  else renderLeaders(_l2Data || []);
+}
+
+function updateHint(text) {
+  document.getElementById('leaders-hint').textContent = text;
+}
+
+function switchTab(tab) {
+  _activeTab = tab;
+  document.getElementById('tab-l1').classList.toggle('active', tab === 'l1');
+  document.getElementById('tab-l2').classList.toggle('active', tab === 'l2');
+  const titles = {
+    l1: '申万一级行业龙头（成交额 TOP5）',
+    l2: '申万二级行业龙头（成交额 TOP5）'
+  };
+  document.getElementById('panel-title').textContent = titles[tab];
+
+  if (tab === 'l2') {
+    if (_l2Data !== null) {
+      updateHint(`共 ${_l2Data.length} 个二级行业`);
+      renderCurrent();
+    } else if (!_l2Loading) {
+      loadL2();
+    }
+  } else {
+    updateHint(_l1Data.length ? `共 ${_l1Data.length} 个行业` : '加载中...');
+    renderCurrent();
+  }
+}
+
+function loadL2() {
+  _l2Loading = true;
+  updateHint('加载中，首次约 2-3 分钟（约 100 个二级行业），之后 30 分钟缓存');
+  document.getElementById('leaders-container').innerHTML =
+    `<div class="loading-mask"><div class="loading-spinner"></div>
+     <span>正在加载二级行业龙头，首次约 2-3 分钟，之后 30 分钟缓存...</span></div>`;
+
+  fetch('/api/leaders/level2')
+    .then(r => r.json())
+    .then(data => {
+      _l2Loading = false;
+      if (data && data[0] && data[0].error) {
+        if (_activeTab === 'l2') {
+          updateHint('加载失败');
+          document.getElementById('leaders-container').innerHTML =
+            `<div class="loading-mask"><span style="color:var(--down)">${data[0].error}</span></div>`;
+        }
+        return;
+      }
+      _l2Data = data || [];
+      if (_activeTab === 'l2') {
+        updateHint(`共 ${_l2Data.length} 个二级行业`);
+        renderLeaders(_l2Data);
+      }
+    })
+    .catch(err => {
+      _l2Loading = false;
+      if (_activeTab === 'l2') {
+        updateHint('加载失败');
+        document.getElementById('leaders-container').innerHTML =
+          `<div class="loading-mask"><span style="color:var(--down)">请求失败：${err.message}</span></div>`;
+      }
+    });
 }
 
 function sortedData(data) {
@@ -189,23 +274,24 @@ function openKline(code, name) {
   }
 }
 
-// ── 加载数据 ───────────────────────────────────────────────────
+// ── 初始加载一级行业 ───────────────────────────────────────────
 fetch('/api/leaders')
   .then(r => r.json())
   .then(data => {
-    const hint = document.getElementById('leaders-hint');
     if (data && data[0] && data[0].error) {
-      hint.textContent = '加载失败';
+      updateHint('加载失败');
       document.getElementById('leaders-container').innerHTML =
         `<div class="loading-mask"><span style="color:var(--down)">${data[0].error}</span></div>`;
       return;
     }
-    _leadersData = data || [];
-    hint.textContent = `共 ${_leadersData.length} 个行业`;
-    renderLeaders(_leadersData);
+    _l1Data = data || [];
+    if (_activeTab === 'l1') {
+      updateHint(`共 ${_l1Data.length} 个行业`);
+      renderCurrent();
+    }
   })
   .catch(err => {
-    document.getElementById('leaders-hint').textContent = '加载失败';
+    updateHint('加载失败');
     document.getElementById('leaders-container').innerHTML =
       `<div class="loading-mask"><span style="color:var(--down)">请求失败：${err.message}</span></div>`;
   });

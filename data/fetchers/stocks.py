@@ -5,6 +5,8 @@ import re
 import requests
 from pathlib import Path
 import yaml
+import akshare as ak
+from data.fetchers import _AK_LOCK
 
 _cfg = yaml.safe_load(Path("config.yaml").read_text(encoding="utf-8"))
 _HEADERS = {"Referer": "https://finance.sina.com.cn"}
@@ -199,6 +201,41 @@ def search_etf(query: str) -> list[dict]:
         if q["code"] in name_map:
             q["name"] = name_map[q["code"]]
     return quotes
+
+
+def fetch_etf_meta(codes: list[str]) -> dict[str, dict]:
+    """获取 ETF 规模(亿元)和折溢价率(%)，数据源：东方财富 fund_etf_spot_em。
+    返回: {code: {scale: float|None, premium: float|None}}
+    """
+    try:
+        with _AK_LOCK:
+            df = ak.fund_etf_spot_em()
+    except Exception:
+        return {}
+    if "代码" not in df.columns:
+        return {}
+    df["_code"] = df["代码"].astype(str).str.zfill(6)
+    target = set(codes)
+    df = df[df["_code"].isin(target)]
+    result: dict[str, dict] = {}
+    for _, row in df.iterrows():
+        code = str(row["_code"])
+        scale: float | None = None
+        premium: float | None = None
+        if "总市值" in row.index:
+            try:
+                v = float(row["总市值"])
+                if v > 0:
+                    scale = round(v / 1e8, 2)
+            except (ValueError, TypeError):
+                pass
+        if "基金折价率" in row.index:
+            try:
+                premium = float(row["基金折价率"])
+            except (ValueError, TypeError):
+                pass
+        result[code] = {"scale": scale, "premium": premium}
+    return result
 
 
 _SINA_KLINE_URL = (

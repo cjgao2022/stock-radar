@@ -34,10 +34,12 @@
         <div class="d-flex align-items-center gap-2">
           <span id="kline-chg" style="font-size:.82rem"></span>
           <div class="d-flex gap-1">
-            <button class="days-btn active" onclick="loadKline(30)" id="btn-30">30日</button>
-            <button class="days-btn" onclick="loadKline(90)" id="btn-90">90日</button>
-            <button class="days-btn" onclick="loadKline(180)" id="btn-180">180日</button>
-            <button class="days-btn" onclick="loadKline(365)" id="btn-365">365日</button>
+            <button class="days-btn active" onclick="loadKline(30)"           id="btn-30">30日</button>
+            <button class="days-btn"        onclick="loadKline(90)"           id="btn-90">90日</button>
+            <button class="days-btn"        onclick="loadKline(180)"          id="btn-180">180日</button>
+            <button class="days-btn"        onclick="loadKline(365)"          id="btn-365">365日</button>
+            <button class="days-btn"        onclick="loadKline(0,'monthly')"  id="btn-monthly">月K</button>
+            <button class="days-btn"        onclick="loadKline(0,'yearly')"   id="btn-yearly">年K</button>
           </div>
         </div>
       </div>
@@ -107,17 +109,26 @@ function pctClass(v){ return v>0?'up':v<0?'down':'flat'; }
 /* ── K 线图 ── */
 const klineChart = echarts.init(document.getElementById('kline-chart'));
 let _curDays = 30;
+let _curPeriod = 'daily';
+const _DAY_BTNS = [30,90,180,365];
+const _PERIOD_BTNS = ['monthly','yearly'];
 
-function loadKline(days){
+function loadKline(days, period='daily'){
   _curDays = days;
-  [30,90,180,365].forEach(d=>{
-    document.getElementById('btn-'+d).classList.toggle('active', d===days);
+  _curPeriod = period;
+  _DAY_BTNS.forEach(d=>{
+    document.getElementById('btn-'+d).classList.toggle('active', d===days && period==='daily');
+  });
+  _PERIOD_BTNS.forEach(p=>{
+    document.getElementById('btn-'+p).classList.toggle('active', p===period);
   });
   document.getElementById('kline-chg').innerHTML = '';
   klineChart.showLoading({text:'',maskColor:'transparent',spinnerRadius:12,lineWidth:2,color:'var(--accent)'});
 
-  fetch(`/api/boards/${boardType}/${encodeURIComponent(boardName)}/kline?days=${days}`)
-    .then(r=>r.json()).then(data=>{
+  let url = `/api/boards/${boardType}/${encodeURIComponent(boardName)}/kline`;
+  url += (period==='monthly'||period==='yearly') ? `?period=${period}` : `?days=${days}`;
+
+  fetch(url).then(r=>r.json()).then(data=>{
       klineChart.hideLoading();
       const rows = data.filter(d=>!d.error);
       if(!rows.length){
@@ -128,71 +139,87 @@ function loadKline(days){
       }
       const dates  = rows.map(d=>d.date);
       const closes = rows.map(d=>d.close);
+      const amounts = rows.map(d=>d.amount!=null ? +(d.amount/1e8).toFixed(2) : 0);
+      const barColors = rows.map(d=>(d.close>=d.open)?'#e8374a':'#18a361');
       const first  = closes[0], last = closes[closes.length-1];
       const chgPct = ((last-first)/first*100).toFixed(2);
       const cls    = chgPct>0?'up':chgPct<0?'down':'flat';
       document.getElementById('kline-chg').innerHTML =
         `<span class="${cls} num fw-bold">${chgPct>0?'+':''}${chgPct}%</span>`;
 
-      // 近5日动量色块
+      // 近5日动量色块（月K/年K 显示近5个周期）
       if(rows.length>=2){
         const recent=rows.slice(-5);
         const momRow=document.getElementById('momentum-row');
         momRow.innerHTML=recent.map(r=>{
           const prev=rows[rows.indexOf(r)-1];
           const chg=prev?((r.close-prev.close)/prev.close*100):null;
-          const cls=chg==null?'flat':chg>0?'up':chg<0?'down':'flat';
+          const cc=chg==null?'flat':chg>0?'up':chg<0?'down':'flat';
           const bg=chg==null?'rgba(255,255,255,.08)'
             :chg>0?`rgba(232,55,74,${Math.min(Math.abs(chg)/5,1)*.6+.15})`
             :`rgba(24,163,97,${Math.min(Math.abs(chg)/5,1)*.6+.15})`;
           const txt=chg!=null?(chg>=0?'+':'')+chg.toFixed(2)+'%':'--';
+          const label = period==='yearly' ? r.date : r.date.slice(period==='monthly'?0:5);
           return `<div style="flex:1;min-width:48px;text-align:center;padding:6px 4px;border-radius:6px;background:${bg}">
-            <div style="font-size:.65rem;color:var(--text3);margin-bottom:2px">${r.date.slice(5)}</div>
-            <div class="${cls} num" style="font-size:.78rem;font-weight:700">${txt}</div>
+            <div style="font-size:.65rem;color:var(--text3);margin-bottom:2px">${label}</div>
+            <div class="${cc} num" style="font-size:.78rem;font-weight:700">${txt}</div>
           </div>`;
         }).join('');
       }
+
+      const lineColor = chgPct>=0 ? '#e8374a' : '#18a361';
+      const axisLabelFmt = period==='yearly' ? v=>v : (period==='monthly' ? v=>v : v=>v.slice(5));
 
       klineChart.setOption({
         backgroundColor:'transparent',
         tooltip:{
           trigger:'axis',
+          axisPointer:{type:'cross',link:[{xAxisIndex:'all'}]},
           backgroundColor:'rgba(13,21,38,.92)',
           borderColor:'rgba(255,255,255,.1)',
           textStyle:{color:'#e0e8f8',fontSize:12},
           formatter:params=>{
             const p=params[0];
-            return `${p.axisValueLabel}<br>收盘 <b class="num">${Number(p.value).toFixed(2)}</b>`;
+            const amtP=params.find(x=>x.seriesName==='成交额');
+            let s=`${p.axisValueLabel}<br>收盘 <b class="num">${Number(p.value).toFixed(2)}</b>`;
+            if(amtP!=null&&amtP.value>0) s+=`<br>成交额 <b class="num">${amtP.value.toFixed(1)}亿</b>`;
+            return s;
           }
         },
-        grid:{left:60,right:16,top:12,bottom:36},
-        xAxis:{
-          type:'category', data:dates, boundaryGap:false,
-          axisLabel:{color:'#5a6a8a',fontSize:11,
-            formatter:v=>v.slice(5)},
-          axisLine:{lineStyle:{color:'#2a3550'}},
-          splitLine:{show:false}
-        },
-        yAxis:{
-          type:'value', scale:true,
-          axisLabel:{color:'#5a6a8a',fontSize:11,formatter:v=>v.toFixed(0)},
-          axisLine:{show:false},
-          splitLine:{lineStyle:{color:'#1e2c48',type:'dashed'}}
-        },
-        series:[{
-          type:'line', data:closes,
-          smooth:0.3,
-          lineStyle:{width:2,color:chgPct>=0?'#e8374a':'#18a361'},
-          symbol:'none',
-          areaStyle:{
-            color:{
-              type:'linear',x:0,y:0,x2:0,y2:1,
-              colorStops:chgPct>=0
-                ?[{offset:0,color:'rgba(232,55,74,.25)'},{offset:1,color:'rgba(232,55,74,.02)'}]
-                :[{offset:0,color:'rgba(24,163,97,.25)'},{offset:1,color:'rgba(24,163,97,.02)'}]
-            }
-          }
-        }]
+        grid:[
+          {left:60,right:16,top:12,bottom:'32%'},
+          {left:60,right:16,top:'72%',bottom:32}
+        ],
+        xAxis:[
+          {type:'category',data:dates,boundaryGap:false,
+           axisLabel:{color:'#5a6a8a',fontSize:11,formatter:axisLabelFmt},
+           axisLine:{lineStyle:{color:'#2a3550'}},splitLine:{show:false}},
+          {type:'category',data:dates,gridIndex:1,boundaryGap:true,
+           axisLabel:{show:false},axisLine:{show:false},splitLine:{show:false}}
+        ],
+        yAxis:[
+          {type:'value',scale:true,gridIndex:0,
+           axisLabel:{color:'#5a6a8a',fontSize:11,formatter:v=>v.toFixed(0)},
+           axisLine:{show:false},splitLine:{lineStyle:{color:'#1e2c48',type:'dashed'}}},
+          {type:'value',gridIndex:1,
+           axisLabel:{color:'#5a6a8a',fontSize:10,formatter:v=>v>0?v.toFixed(0)+'亿':''},
+           axisLine:{show:false},splitLine:{lineStyle:{color:'#1e2c48',type:'dashed'}},
+           min:0}
+        ],
+        series:[
+          {name:'收盘',type:'line',data:closes,
+           xAxisIndex:0,yAxisIndex:0,
+           smooth:0.3,lineStyle:{width:2,color:lineColor},symbol:'none',
+           areaStyle:{color:{type:'linear',x:0,y:0,x2:0,y2:1,
+             colorStops:chgPct>=0
+               ?[{offset:0,color:'rgba(232,55,74,.25)'},{offset:1,color:'rgba(232,55,74,.02)'}]
+               :[{offset:0,color:'rgba(24,163,97,.25)'},{offset:1,color:'rgba(24,163,97,.02)'}]
+           }}},
+          {name:'成交额',type:'bar',data:amounts,
+           xAxisIndex:1,yAxisIndex:1,
+           barMaxWidth:20,
+           itemStyle:{color:params=>barColors[params.dataIndex]||'#3d7efc'}}
+        ]
       });
     });
 }

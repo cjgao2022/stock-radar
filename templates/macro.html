@@ -9,13 +9,69 @@
     font-family: var(--num);
     letter-spacing: .5px;
   }
-  .ind-meta { font-size: .7rem; color: rgba(255,255,255,.4); margin-top: 1px; }
+  .ind-meta { font-size: .7rem; color: var(--text3); margin-top: 1px; }
   .cal-date { font-family: var(--num); font-size: .82rem; }
   .cal-val  { font-family: var(--num); font-size: .82rem; color: var(--text2); }
+
+  /* 估值温度面板 */
+  .val-stat-row {
+    display: flex; gap: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .val-stat {
+    flex: 1; padding: 12px 16px;
+    border-right: 1px solid var(--border);
+  }
+  .val-stat:last-child { border-right: none; }
+  .val-label { font-size: .68rem; color: var(--text3); margin-bottom: 3px; letter-spacing: .3px; }
+  .val-num   { font-size: 1.05rem; font-weight: 800; font-family: var(--num); }
+  .val-sub   { font-size: .68rem; color: var(--text3); margin-top: 1px; }
+  .val-green  { color: #18a361; }
+  .val-orange { color: #f5a623; }
+  .val-red    { color: #e8374a; }
 </style>
 {% endblock %}
 
 {% block content %}
+<!-- 市场估值温度 -->
+<div class="row g-2 mb-2">
+  <div class="col-12">
+    <div class="panel">
+      <div class="panel-hd">
+        <div class="hd-title"><div class="accent-bar"></div>市场估值温度</div>
+        <span id="val-hint" style="font-size:.72rem;color:var(--text2)">加载中...</span>
+      </div>
+      <!-- 4个核心指标 -->
+      <div class="val-stat-row">
+        <div class="val-stat">
+          <div class="val-label">全A滚动PE</div>
+          <div class="val-num" id="val-pe">--</div>
+          <div class="val-sub" id="val-pe-date">--</div>
+        </div>
+        <div class="val-stat">
+          <div class="val-label">近10年历史分位</div>
+          <div class="val-num" id="val-pct10">--</div>
+          <div class="val-sub" id="val-label">--</div>
+        </div>
+        <div class="val-stat">
+          <div class="val-label">股债利差（ERP）</div>
+          <div class="val-num" id="val-erp">--</div>
+          <div class="val-sub">PE倒数 − 10年国债</div>
+        </div>
+        <div class="val-stat">
+          <div class="val-label">10年国债收益率</div>
+          <div class="val-num" id="val-bond">--</div>
+          <div class="val-sub" id="val-pct5">近5年分位 --</div>
+        </div>
+      </div>
+      <!-- ERP + PE 历史走势图 -->
+      <div class="panel-body" style="padding:8px 12px 10px">
+        <div id="val-chart" style="width:100%;height:220px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- 4 指标图表 -->
 <div class="row g-2 mb-2">
   {% set panels = [
@@ -42,6 +98,31 @@
     </div>
   </div>
   {% endfor %}
+</div>
+
+<!-- 融资余额趋势 -->
+<div class="row g-2 mb-2">
+  <div class="col-12">
+    <div class="panel">
+      <div class="panel-hd">
+        <div class="hd-title"><div class="accent-bar"></div>融资余额趋势</div>
+        <div style="display:flex;align-items:center;gap:16px;font-family:var(--num)">
+          <span style="font-size:.72rem;color:var(--text2)">当前余额
+            <b id="margin-cur" style="font-size:.9rem;color:var(--text1)">--</b> 亿
+          </span>
+          <span style="font-size:.72rem;color:var(--text2)">5日变化
+            <b id="margin-5d" style="font-size:.9rem">--</b>
+          </span>
+          <span style="font-size:.72rem;color:var(--text2)">20日变化
+            <b id="margin-20d" style="font-size:.9rem">--</b> 亿
+          </span>
+        </div>
+      </div>
+      <div class="panel-body" style="padding:8px 12px 10px">
+        <div id="margin-chart" style="width:100%;height:180px;"></div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- 即将发布日历 -->
@@ -195,12 +276,202 @@ function renderCalendar(events) {
   }).join('');
 }
 
+// ── 市场估值温度 ───────────────────────────────────────────────────
+function renderValuation(d) {
+  if (!d || d.error) {
+    document.getElementById('val-hint').textContent = d?.error || '数据加载失败';
+    return;
+  }
+
+  const colorCls = d.label_color === 'green' ? 'val-green'
+                 : d.label_color === 'red'   ? 'val-red'
+                 :                             'val-orange';
+
+  document.getElementById('val-pe').textContent      = d.pe != null ? d.pe.toFixed(2) + 'x' : '--';
+  document.getElementById('val-pe-date').textContent = d.date ? '截至 ' + d.date : '';
+  document.getElementById('val-pct10').innerHTML     =
+    d.pe_10y_pct != null
+      ? `<span class="${colorCls}">${d.pe_10y_pct}%</span>`
+      : '--';
+  document.getElementById('val-label').innerHTML     =
+    `<span class="${colorCls}">${d.label || '--'}</span>`;
+  document.getElementById('val-erp').textContent     =
+    d.erp != null ? (d.erp >= 0 ? '+' : '') + d.erp.toFixed(2) + '%' : '--';
+  document.getElementById('val-erp').className       =
+    'val-num ' + (d.erp > 0 ? 'val-green' : d.erp < 0 ? 'val-red' : '');
+  document.getElementById('val-bond').textContent    =
+    d.bond_yield != null ? d.bond_yield.toFixed(4) + '%' : '--';
+  document.getElementById('val-pct5').textContent    =
+    d.pe_5y_pct != null ? `近5年分位 ${d.pe_5y_pct}%` : '';
+  document.getElementById('val-hint').textContent    = d.label || '';
+  document.getElementById('val-hint').className      = colorCls;
+
+  // 历史走势图（PE + ERP 双轴）
+  if (!d.chart_dates || !d.chart_dates.length) return;
+  const chart = echarts.init(document.getElementById('val-chart'));
+  window.addEventListener('resize', () => chart.resize());
+
+  const erpData = d.chart_erp.map(v => v != null ? v : null);
+  const erpColor = d.erp != null && d.erp >= 0 ? '#18a361' : '#e8374a';
+
+  chart.setOption({
+    backgroundColor: 'transparent',
+    animation: false,
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'rgba(13,21,38,.92)',
+      borderColor: 'rgba(255,255,255,.1)',
+      textStyle: {color: '#e0e8f8', fontSize: 11},
+      formatter: params => {
+        const lbl = params[0]?.axisValueLabel || '';
+        let s = lbl;
+        params.forEach(p => {
+          if (p.value == null) return;
+          const u = p.seriesName === 'ERP' ? '%' : 'x';
+          s += `<br>${p.seriesName} <b style="color:${p.color}">${Number(p.value).toFixed(2)}${u}</b>`;
+        });
+        return s;
+      }
+    },
+    legend: {
+      top: 4, right: 10,
+      textStyle: {color: '#8a94aa', fontSize: 11},
+      itemWidth: 14, itemHeight: 3
+    },
+    grid: {left: 52, right: 52, top: 28, bottom: 26},
+    xAxis: {
+      type: 'category',
+      data: d.chart_dates,
+      boundaryGap: false,
+      axisLabel: {color: '#5a6a8a', fontSize: 9, interval: Math.floor(d.chart_dates.length / 6)},
+      axisLine: {lineStyle: {color: '#2a3550'}},
+      splitLine: {show: false}
+    },
+    yAxis: [
+      {
+        type: 'value', name: 'PE', nameTextStyle: {color: '#5a6a8a', fontSize: 9},
+        scale: true,
+        axisLabel: {color: '#5a6a8a', fontSize: 9, formatter: v => v.toFixed(0) + 'x'},
+        splitLine: {lineStyle: {color: '#1e2c48', type: 'dashed'}}
+      },
+      {
+        type: 'value', name: 'ERP%', nameTextStyle: {color: '#5a6a8a', fontSize: 9},
+        scale: true,
+        axisLabel: {color: '#5a6a8a', fontSize: 9, formatter: v => v.toFixed(1) + '%'},
+        splitLine: {show: false},
+        axisLine: {show: false}
+      }
+    ],
+    series: [
+      {
+        name: 'PE',
+        type: 'line',
+        yAxisIndex: 0,
+        data: d.chart_pe,
+        smooth: false, symbol: 'none',
+        lineStyle: {width: 1.5, color: '#3d7efc'},
+        areaStyle: {color: {type:'linear',x:0,y:0,x2:0,y2:1,
+          colorStops:[{offset:0,color:'rgba(61,126,252,.18)'},{offset:1,color:'rgba(61,126,252,.01)'}]}}
+      },
+      {
+        name: 'ERP',
+        type: 'line',
+        yAxisIndex: 1,
+        data: erpData,
+        smooth: false, symbol: 'none',
+        lineStyle: {width: 1.5, color: erpColor},
+        markLine: {
+          silent: true, symbol: 'none',
+          lineStyle: {type: 'dashed', color: 'rgba(255,255,255,.2)', width: 1},
+          label: {show: false},
+          data: [{yAxis: 0, yAxisIndex: 1}]
+        }
+      }
+    ]
+  });
+}
+
+function renderMargin(d) {
+  if (!d || d.error) return;
+  const fmt = v => v != null ? (v >= 0 ? '+' : '') + Number(v).toFixed(0) + '亿' : '--';
+  document.getElementById('margin-cur').textContent = d.current != null ? Number(d.current).toFixed(0) : '--';
+  const el5 = document.getElementById('margin-5d');
+  el5.textContent = d.chg_5d != null
+    ? (d.chg_5d >= 0 ? '+' : '') + Number(d.chg_5d).toFixed(0) + '亿 (' + (d.chg_5d_pct >= 0 ? '+' : '') + d.chg_5d_pct + '%)'
+    : '--';
+  el5.style.color = d.chg_5d > 0 ? '#e8374a' : d.chg_5d < 0 ? '#18a361' : '';
+  document.getElementById('margin-20d').textContent = fmt(d.chg_20d);
+  document.getElementById('margin-20d').style.color = d.chg_20d > 0 ? '#e8374a' : d.chg_20d < 0 ? '#18a361' : '';
+
+  if (!d.history || !d.history.length) return;
+  const chart = echarts.init(document.getElementById('margin-chart'));
+  window.addEventListener('resize', () => chart.resize());
+  const dates = d.history.map(x => x.date);
+  const vals  = d.history.map(x => x.balance);
+  const ma20  = vals.map((_, i) => {
+    if (i < 19) return null;
+    return +(vals.slice(i - 19, i + 1).reduce((s, v) => s + v, 0) / 20).toFixed(2);
+  });
+  chart.setOption({
+    backgroundColor: 'transparent',
+    animation: false,
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'rgba(13,21,38,.92)',
+      borderColor: 'rgba(255,255,255,.1)',
+      textStyle: {color: '#e0e8f8', fontSize: 11},
+      formatter: params => {
+        const lbl = params[0]?.axisValueLabel || '';
+        let s = lbl;
+        params.forEach(p => {
+          if (p.value == null) return;
+          s += `<br>${p.seriesName} <b style="color:${p.color}">${Number(p.value).toFixed(0)}亿</b>`;
+        });
+        return s;
+      }
+    },
+    legend: {
+      top: 4, right: 10,
+      textStyle: {color: '#8a94aa', fontSize: 11},
+      itemWidth: 14, itemHeight: 3
+    },
+    grid: {left: 64, right: 12, top: 28, bottom: 26},
+    xAxis: {
+      type: 'category', data: dates, boundaryGap: false,
+      axisLabel: {color: '#5a6a8a', fontSize: 9, interval: Math.floor(dates.length / 6)},
+      axisLine: {lineStyle: {color: '#2a3550'}},
+      splitLine: {show: false}
+    },
+    yAxis: {
+      type: 'value', scale: true,
+      axisLabel: {color: '#5a6a8a', fontSize: 9, formatter: v => (v / 10000).toFixed(1) + '万亿'},
+      splitLine: {lineStyle: {color: '#1e2c48', type: 'dashed'}}
+    },
+    series: [
+      {
+        name: '融资余额', type: 'line', data: vals, smooth: false, symbol: 'none',
+        lineStyle: {width: 1.5, color: '#3d7efc'},
+        areaStyle: {color: {type:'linear',x:0,y:0,x2:0,y2:1,
+          colorStops:[{offset:0,color:'rgba(61,126,252,.2)'},{offset:1,color:'rgba(61,126,252,.01)'}]}}
+      },
+      {
+        name: 'MA20', type: 'line', data: ma20, smooth: false, symbol: 'none',
+        lineStyle: {width: 1, color: '#f5a623', type: 'dashed'}
+      }
+    ]
+  });
+}
+
 Promise.all([
   fetch('/api/macro/indicators').then(r => r.json()),
   fetch('/api/macro/calendar').then(r => r.json()),
-]).then(([ind, cal]) => {
+  fetch('/api/macro/valuation').then(r => r.json()),
+  fetch('/api/macro/margin').then(r => r.json()),
+]).then(([ind, cal, val, margin]) => {
   ['cpi', 'ppi', 'pmi', 'm2'].forEach(key => renderChart(key, ind[key]));
   renderCalendar(cal);
+  renderValuation(val);
+  renderMargin(margin);
 }).catch(() => {
   document.getElementById('cal-tbody').innerHTML =
     '<tr><td colspan="4" class="text-center text-danger py-3">数据加载失败</td></tr>';

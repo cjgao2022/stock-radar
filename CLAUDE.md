@@ -175,7 +175,8 @@ stock-radar/
 | 行业板块列表 | THS | `stock_board_industry_summary_ths()` |
 | 行业资金流向 | THS | `stock_fund_flow_industry(symbol="即时")` |
 | 个股资金流向 | THS | `stock_fund_flow_individual()` |
-| 板块 K 线（日K） | THS | `stock_board_industry/concept_index_ths()` |
+| 板块 K 线（日K/月K/年K） | THS | `stock_board_industry/concept_index_ths()`；月K/年K 由 Python pandas resample 日线合成（1500/1800日）|
+| ETF 规模/折溢价率 | 东方财富 | `fund_etf_spot_em()`；字段：`总市值`（÷1e8=亿元）、`基金折价率`（%，正为折价）；30分钟缓存 |
 | 涨停板 | 东方财富 | `stock_zt_pool_em()` |
 | 板块构成股 | 东方财富 | `stock_board_concept/industry_cons_em()`（push2 易被封） |
 | 龙虎榜 | 东方财富 | `stock_lhb_detail_em(start_date, end_date)`（必传日期） |
@@ -184,8 +185,12 @@ stock-radar/
 | A股公告（全市场当日） | 东方财富 | `stock_notice_report(symbol="全部", date)`；symbol 为公告类型非股票代码；全量约 1000-2000 条/天，5-15 秒，30 分钟缓存 |
 | 个股研报 | 东方财富 | `stock_research_report_em(symbol)`；返回字段：股票简称/报告名称/东财评级/机构/日期/报告PDF链接；无目标价 |
 | 申万一级行业成分 | 申万 | `sw_index_first_info()` 返回行业代码（格式 `801010.SI`，去掉 `.SI` 后传入 `index_stock_cons()`）；31 个一级行业映射 24h 模块缓存 |
-| 申万行业实时指数 | 申万 | `index_realtime_sw(symbol='一级行业')`；字段：指数代码/昨收盘/最新价，涨跌幅需 Python 自算 |
+| 申万二级行业成分 | 申万 | `sw_index_second_info()` 同格式，约 100 个二级行业；`index_stock_cons()` 复用；映射 24h 模块缓存 |
+| 申万行业实时指数 | 申万 | `index_realtime_sw(symbol='一级行业')` 或 `symbol='二级行业'`；字段：指数代码/昨收盘/最新价，涨跌幅需 Python 自算；指数代码为纯数字（无 `.SI`） |
 | 全量 A 股成交额（行业龙头排名） | 新浪（via AKShare） | `stock_zh_a_spot()`；代码格式 `sh600519`，取后6位得纯数字代码；按成交额排名取各行业 TOP5 |
+| 全A市场PE历史分位 + 股债比价（ERP） | 乐咕乐股 | `stock_index_pe_lg()`；返回 2005 至今日频全A市盈率（等权/静态/滚动，3类×中位数变体）；用于计算历史百分位；与 `bond_zh_us_rate()` 合算 ERP = (1/PE)×100 − 10年国债收益率；文件：`data/fetchers/market_state.py` |
+| 10年期国债收益率 | 宏观（via AKShare） | `bond_zh_us_rate(start_date='YYYYMMDD')`；字段：`中国国债收益率10年`；与 PE倒数合算 ERP；文件：`data/fetchers/market_state.py` |
+| 两融余额历史趋势 | 证券交易所（via AKShare） | `stock_margin_account_info()`；无参；返回全市场日频 融资余额/融券余额/融资买入额（亿元）；2013至今，约3300+行；文件：`data/fetchers/market_state.py` |
 
 ---
 

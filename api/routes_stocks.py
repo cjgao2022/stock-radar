@@ -4,7 +4,7 @@ from datetime import date as _date
 from typing import Optional
 from fastapi import APIRouter
 from pydantic import BaseModel
-from data.fetchers.stocks import fetch_watchlist, fetch_etf_watchlist, search_stock, search_etf, fetch_stock_kline, fetch_quotes
+from data.fetchers.stocks import fetch_watchlist, fetch_etf_watchlist, search_stock, search_etf, fetch_stock_kline, fetch_quotes, fetch_etf_meta
 from data.fetchers.flow import fetch_stock_flow, fetch_stock_flow_rank_all
 from data.fetchers.fundamentals import fetch_stock_fundamental
 from data.watchlist_store import add_stock, remove_stock, add_etf, remove_etf, update_stock_cost, update_etf_cost
@@ -140,6 +140,18 @@ def api_etf_vol_stats():
         return result
 
     return get_cached(key, 300, _compute)
+
+
+@router.get("/etf/meta")
+def api_etf_meta():
+    """ETF 规模(亿元)和折溢价率(%)，数据源：东方财富 fund_etf_spot_em。30分钟缓存。"""
+    from data.watchlist_store import get_etfs
+    etfs = get_etfs()
+    codes = [item["code"] for item in etfs]
+    if not codes:
+        return {}
+    key = f"etf_meta_{_date.today()}"
+    return get_cached(key, 1800, lambda: fetch_etf_meta(codes))
 
 
 @router.get("/flow_rank")
