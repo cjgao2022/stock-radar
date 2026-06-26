@@ -30,32 +30,6 @@ def fetch_industry_flow() -> list[dict]:
         return [{"error": str(e)}]
 
 
-def fetch_concept_flow() -> list[dict]:
-    """概念板块资金流向排行（同花顺）- 净额单位：亿元"""
-    try:
-        with _AK_LOCK:
-            df = ak.stock_fund_flow_concept(symbol="即时")
-        rename = {
-            "序号": "rank",
-            "行业": "name",
-            "行业指数": "index_value",
-            "行业-涨跌幅": "change_pct",
-            "流入资金": "inflow",
-            "流出资金": "outflow",
-            "净额": "net",
-            "公司家数": "company_count",
-            "领涨股": "top_stock",
-            "领涨股-涨跌幅": "top_stock_chg",
-        }
-        df = df.rename(columns=rename)
-        keep = [c for c in ["rank", "name", "change_pct", "inflow", "outflow", "net",
-                             "company_count", "top_stock", "top_stock_chg"] if c in df.columns]
-        df = df[keep].sort_values("net", ascending=False)
-        return df.to_dict(orient="records")
-    except Exception as e:
-        return [{"error": str(e)}]
-
-
 def fetch_stock_flow(code: str, market: str) -> list[dict]:
     """个股资金流向（同花顺）"""
     try:
@@ -94,10 +68,10 @@ def _pct_to_float(s) -> float | None:
         return None
 
 
-def fetch_stock_flow_rank_all(indicator: str = "今日") -> list[dict]:
-    """全市场个股主力资金净流入排行（同花顺 stock_fund_flow_individual）
-    返回字段：code, name, price, change_pct(float), main_net(元), inflow(元), outflow(元)
-    注：THS 此接口不区分超大单/散户，big_net/retail_net 返回 None
+def fetch_stock_flow_rank_all() -> list[dict]:
+    """全市场个股主力资金净流入排行（同花顺 stock_fund_flow_individual(symbol="即时")）
+    返回字段：code, name, price, change_pct(float), main_net(元), main_pct(%), big_net/retail_net=None
+    注：THS 此接口不区分超大单/散户
     """
     try:
         with _AK_LOCK:

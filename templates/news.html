@@ -211,11 +211,9 @@ function loadAnnouncements() {
 function buildTypeFilter(data) {
   const types = [...new Set(data.map(d => d.type).filter(Boolean))].sort();
   const wrap = document.getElementById('type-filter');
-  wrap.innerHTML = `<button class="type-chip active" data-type="" onclick="filterByType('')">全部</button>` +
-    types.map(t => `<button class="type-chip" data-type="${t}" onclick="filterByType('${encodeType(t)}')">${t}</button>`).join('');
+  wrap.innerHTML = `<button class="type-chip active" data-type="" onclick="filterByType(this.dataset.type)">全部</button>` +
+    types.map(t => `<button class="type-chip" data-type="${t.replace(/&/g,'&amp;').replace(/"/g,'&quot;')}" onclick="filterByType(this.dataset.type)">${t}</button>`).join('');
 }
-
-function encodeType(t) { return t.replace(/'/g, "\\'"); }
 
 function filterByType(type) {
   document.querySelectorAll('.type-chip').forEach(el => {

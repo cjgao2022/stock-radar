@@ -4,15 +4,12 @@
 {% block head %}
 <style>
   .kline-loading { display:flex;align-items:center;justify-content:center;height:340px;color:var(--text3);font-size:.9rem; }
-  .stat-row { display:flex;gap:0;background:var(--dark2);border-radius:10px;border:1px solid var(--border2);overflow:hidden;margin-bottom:14px; }
-  .stat-row .sr-item { flex:1;padding:12px 16px;border-right:1px solid var(--border2); }
-  .stat-row .sr-item:last-child { border-right:none; }
-  .stat-row .sr-label { font-size:.7rem;color:var(--text3);letter-spacing:.4px;margin-bottom:3px; }
-  .stat-row .sr-val   { font-size:1.1rem;font-weight:800;font-variant-numeric:tabular-nums; }
 
-  [data-theme="light"] .stat-row { background:#f7f9fc; border-color:var(--border); }
-  [data-theme="light"] .stat-row .sr-item { border-right-color:var(--border); }
-  [data-theme="light"] .stat-row .sr-label { color:var(--text3); }
+  .stat-strip { display:flex;flex-wrap:wrap;gap:0;border-bottom:1px solid var(--border);padding:10px 16px; }
+  .stat-strip .ss-item { display:flex;flex-direction:column;padding:4px 20px 4px 0;margin-right:20px;border-right:1px solid var(--border); }
+  .stat-strip .ss-item:last-child { border-right:none;margin-right:0;flex:1; }
+  .stat-strip .ss-label { font-size:.68rem;color:var(--text3);letter-spacing:.3px;margin-bottom:3px;white-space:nowrap; }
+  .stat-strip .ss-val   { font-size:1rem;font-weight:800;font-variant-numeric:tabular-nums; }
 </style>
 {% endblock %}
 
@@ -25,14 +22,13 @@
   <span class="chg-badge flat" style="font-size:.72rem">{{ board_type_label }}</span>
 </div>
 
-<div class="row g-3">
-  <!-- K 线图 -->
-  <div class="col-lg-7">
-    <div class="panel h-100 d-flex flex-column">
-      <div class="panel-hd flex-shrink-0">
+<div class="row g-3 mb-3">
+  <!-- K 线图 + 摘要统计条 -->
+  <div class="col-12">
+    <div class="panel">
+      <div class="panel-hd">
         <div class="hd-title"><div class="accent-bar"></div>{{ board_name }} K线</div>
         <div class="d-flex align-items-center gap-2">
-          <span id="kline-chg" style="font-size:.82rem"></span>
           <div class="d-flex gap-1">
             <button class="days-btn active" onclick="loadKline(30)"           id="btn-30">30日</button>
             <button class="days-btn"        onclick="loadKline(90)"           id="btn-90">90日</button>
@@ -43,44 +39,51 @@
           </div>
         </div>
       </div>
-      <div style="flex:1;min-height:0;padding:8px 4px 4px">
+      <!-- 统计条 -->
+      <div class="stat-strip">
+        <div class="ss-item">
+          <div class="ss-label" id="kline-chg-label">区间涨跌</div>
+          <div class="ss-val" id="kline-chg">--</div>
+        </div>
+        <div class="ss-item">
+          <div class="ss-label">今日涨跌</div>
+          <div class="ss-val" id="sr-chg">--</div>
+        </div>
+        <div class="ss-item">
+          <div class="ss-label">净流入</div>
+          <div class="ss-val" id="sr-net">--</div>
+        </div>
+        <div class="ss-item">
+          <div class="ss-label">公司家数</div>
+          <div class="ss-val" id="sr-cnt">--</div>
+        </div>
+        <div class="ss-item">
+          <div class="ss-label">领涨股</div>
+          <div id="top-stock" style="font-size:.9rem;font-weight:700;white-space:nowrap">--</div>
+        </div>
+        <div class="ss-item">
+          <div class="ss-label">近5日涨跌</div>
+          <div id="momentum-row" class="d-flex gap-1" style="flex-wrap:wrap;margin-top:2px"></div>
+        </div>
+      </div>
+      <div style="padding:8px 4px 12px">
         <div id="kline-chart" style="width:100%;height:340px;"></div>
       </div>
     </div>
   </div>
+</div>
 
-  <!-- 右侧：统计 + 构成股 -->
-  <div class="col-lg-5 d-flex flex-column gap-3">
-    <!-- 板块统计 -->
+<!-- 构成股（全宽） -->
+<div class="row g-3">
+  <div class="col-12">
     <div class="panel">
-      <div class="panel-hd"><div class="hd-title"><div class="accent-bar"></div>板块摘要</div></div>
-      <div class="panel-body">
-        <div class="stat-row" id="stat-row">
-          <div class="sr-item"><div class="sr-label">今日涨跌</div><div class="sr-val" id="sr-chg">--</div></div>
-          <div class="sr-item"><div class="sr-label">净流入</div><div class="sr-val" id="sr-net">--</div></div>
-          <div class="sr-item"><div class="sr-label">公司家数</div><div class="sr-val" id="sr-cnt">--</div></div>
-        </div>
-        <div class="mb-3">
-          <div style="font-size:.72rem;color:var(--text3);margin-bottom:4px">领涨股</div>
-          <div id="top-stock" style="font-size:.95rem;font-weight:700">--</div>
-        </div>
-        <!-- 近5日动量 -->
-        <div>
-          <div style="font-size:.72rem;color:var(--text3);margin-bottom:6px">近5日涨跌</div>
-          <div id="momentum-row" class="d-flex gap-1" style="flex-wrap:wrap"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 构成股 -->
-    <div class="panel flex-grow-1">
       <div class="panel-hd">
         <div class="hd-title"><div class="accent-bar"></div>构成股</div>
         <span id="cons-count" style="font-size:.72rem;color:var(--text3)"></span>
       </div>
-      <div style="max-height:280px;overflow-y:auto">
+      <div class="table-responsive">
         <table class="data-table">
-          <thead style="position:sticky;top:0;z-index:1">
+          <thead>
             <tr>
               <th>代码</th><th>名称</th>
               <th class="text-end">最新价</th>
@@ -122,7 +125,9 @@ function loadKline(days, period='daily'){
   _PERIOD_BTNS.forEach(p=>{
     document.getElementById('btn-'+p).classList.toggle('active', p===period);
   });
-  document.getElementById('kline-chg').innerHTML = '';
+  document.getElementById('kline-chg').innerHTML = '--';
+  const _labelMap = {30:'近30日',90:'近90日',180:'近180日',365:'近365日',monthly:'月K区间',yearly:'年K区间'};
+  document.getElementById('kline-chg-label').textContent = _labelMap[period==='daily'?days:period] || '区间涨跌';
   klineChart.showLoading({text:'',maskColor:'transparent',spinnerRadius:12,lineWidth:2,color:'var(--accent)'});
 
   let url = `/api/boards/${boardType}/${encodeURIComponent(boardName)}/kline`;
@@ -145,7 +150,7 @@ function loadKline(days, period='daily'){
       const chgPct = ((last-first)/first*100).toFixed(2);
       const cls    = chgPct>0?'up':chgPct<0?'down':'flat';
       document.getElementById('kline-chg').innerHTML =
-        `<span class="${cls} num fw-bold">${chgPct>0?'+':''}${chgPct}%</span>`;
+        `<span class="${cls} num fw-bold" style="font-size:1rem">${chgPct>0?'+':''}${chgPct}%</span>`;
 
       // 近5日动量色块（月K/年K 显示近5个周期）
       if(rows.length>=2){
@@ -180,8 +185,15 @@ function loadKline(days, period='daily'){
           textStyle:{color:'#e0e8f8',fontSize:12},
           formatter:params=>{
             const p=params[0];
+            const idx=p.dataIndex;
             const amtP=params.find(x=>x.seriesName==='成交额');
-            let s=`${p.axisValueLabel}<br>收盘 <b class="num">${Number(p.value).toFixed(2)}</b>`;
+            const close=Number(p.value);
+            const prevClose=idx>0?closes[idx-1]:null;
+            const dayChg=prevClose!=null?((close-prevClose)/prevClose*100):null;
+            const chgStr=dayChg!=null
+              ?`<span style="color:${dayChg>0?'#e8374a':dayChg<0?'#18a361':'#8899bb'};font-weight:700">${dayChg>0?'+':''}${dayChg.toFixed(2)}%</span>`
+              :'';
+            let s=`<span style="color:#8899bb">${p.axisValueLabel}</span><br>收盘 <b class="num">${close.toFixed(2)}</b>　${chgStr}`;
             if(amtP!=null&&amtP.value>0) s+=`<br>成交额 <b class="num">${amtP.value.toFixed(1)}亿</b>`;
             return s;
           }
@@ -251,18 +263,19 @@ fetch(`/api/boards/${boardType}/${encodeURIComponent(boardName)}/constituents`)
   .then(r=>r.json()).then(data=>{
     const tbody = document.getElementById('cons-tbody');
     if(!data.length||data[0]?.error){
-      const isNetErr = data[0]?.error?.includes('Connection')||data[0]?.error?.includes('aborted')||data[0]?.error?.includes('Remote');
-      const msg = isNetErr
-        ? '构成股数据来自东方财富，当前网络无法连接（可切换网络后刷新）'
-        : (data[0]?.error||'暂无数据');
+      const msg = data[0]?.error || '暂无数据';
       tbody.innerHTML=`<tr><td colspan="4" class="text-center py-3" style="font-size:.82rem;color:var(--text3)">${msg}</td></tr>`;
       return;
     }
-    document.getElementById('cons-count').textContent = `共 ${data.length} 只`;
+    document.getElementById('cons-count').textContent = `涨跌幅前 ${data.length} 只`;
     const sorted = [...data].sort((a,b)=>(b.change_pct||0)-(a.change_pct||0));
+    const escAttr = s => (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
     tbody.innerHTML = sorted.map(d=>{
       const cls = pctClass(d.change_pct);
-      return `<tr>
+      return `<tr style="cursor:pointer"
+          data-code="${escAttr(d.stock_code)}"
+          data-name="${escAttr(d.stock_name)}"
+          onclick="openKlineModal(this.dataset.code,this.dataset.name,false)">
         <td class="num text-muted" style="font-size:.76rem">${d.stock_code||'-'}</td>
         <td class="fw-semibold" style="font-size:.84rem">${d.stock_name||'-'}</td>
         <td class="text-end num ${cls}">${d.price!=null?Number(d.price).toFixed(2):'-'}</td>

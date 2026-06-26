@@ -162,7 +162,7 @@ def api_flow_rank():
     codes = {item["code"] for item in get_stocks()}
 
     def _fetch():
-        rows = fetch_stock_flow_rank_all("今日")
+        rows = fetch_stock_flow_rank_all()
         if rows and "error" in rows[0]:
             return rows
         return [r for r in rows if str(r.get("code", "")).zfill(6) in codes

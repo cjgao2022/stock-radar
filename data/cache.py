@@ -133,7 +133,8 @@ def save_board_constituents(date: str, board_type: str, board_name: str, rows: l
             """INSERT OR REPLACE INTO board_constituents
                (date, board_type, board_name, stock_code, stock_name, change_pct, price, volume)
                VALUES (:date, :board_type, :board_name, :stock_code, :stock_name, :change_pct, :price, :volume)""",
-            [{**r, "date": date, "board_type": board_type, "board_name": board_name} for r in rows],
+            [{**r, "date": date, "board_type": board_type, "board_name": board_name,
+              "volume": r.get("volume")} for r in rows],
         )
 
 

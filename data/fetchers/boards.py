@@ -2,12 +2,55 @@
 
 概念板块列表：THS stock_fund_flow_concept 即时（含领涨股）
 行业板块列表：THS stock_fund_flow_industry 即时（含领涨股）
-构成股：东方财富（RemoteDisconnected，已降级为 THS K 线图）
+构成股：THS HTML 接口（q.10jqka.com.cn），涨跌幅前20只
 """
 
+import re
+import time
+import requests
 import akshare as ak
 import pandas as pd
 from data.fetchers import _AK_LOCK
+
+# ── THS 构成股 HTML 接口 ──────────────────────────────────────────
+_THS_HEADERS = {
+    'Referer': 'http://q.10jqka.com.cn/',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120',
+}
+_ROW_RE = re.compile(
+    r'stockpage\.10jqka\.com\.cn/(\d{6})/[^>]+>\1</a></td>\r\n'
+    r'\s+<td><a[^>]+>([^<]+)</a></td>\r\n'
+    r'\s+<td[^>]*>([\d.]+)</td>\r\n'
+    r'\s+<td[^>]*>([+-]?[\d.]+)</td>'
+)
+
+_ind_code_cache: tuple | None = None  # (name→code dict, timestamp)
+_con_code_cache: tuple | None = None
+_CODE_TTL = 86400  # 24h — 板块成分变化极少
+
+
+def _get_industry_code_map() -> dict:
+    global _ind_code_cache
+    now = time.time()
+    if _ind_code_cache and now - _ind_code_cache[1] < _CODE_TTL:
+        return _ind_code_cache[0]
+    with _AK_LOCK:
+        df = ak.stock_board_industry_name_ths()
+    mapping = dict(zip(df['name'].astype(str), df['code'].astype(str)))
+    _ind_code_cache = (mapping, now)
+    return mapping
+
+
+def _get_concept_code_map() -> dict:
+    global _con_code_cache
+    now = time.time()
+    if _con_code_cache and now - _con_code_cache[1] < _CODE_TTL:
+        return _con_code_cache[0]
+    with _AK_LOCK:
+        df = ak.stock_board_concept_name_ths()
+    mapping = dict(zip(df['name'].astype(str), df['code'].astype(str)))
+    _con_code_cache = (mapping, now)
+    return mapping
 
 
 def _fetch_concept_list() -> list[dict]:
@@ -123,31 +166,51 @@ def fetch_board_kline(board_type: str, board_name: str, days: int = 30, period: 
 
 def fetch_board_constituents(board_type: str, board_name: str) -> list[dict]:
     """
-    按需拉取板块构成股 + 新浪实时行情
+    拉取板块构成股（THS HTML接口，涨跌幅前20只）
     board_type: 'concept' | 'industry'
+    返回: [{stock_code, stock_name, price, change_pct}, ...]
     """
-    import requests
-
     try:
-        if board_type == "concept":
-            with _AK_LOCK:
-                df = ak.stock_board_concept_cons_em(symbol=board_name)
+        if board_type == "industry":
+            code_map = _get_industry_code_map()
+            url_tpl = "http://q.10jqka.com.cn/thshy/detail/code/{code}/"
         else:
-            with _AK_LOCK:
-                df = ak.stock_board_industry_cons_em(symbol=board_name)
+            code_map = _get_concept_code_map()
+            url_tpl = "http://q.10jqka.com.cn/gn/detail/code/{code}/"
     except Exception as e:
-        return [{"error": str(e)}]
+        return [{"error": f"获取板块代码表失败: {e}"}]
 
-    rename = {
-        "代码": "stock_code",
-        "名称": "stock_name",
-        "最新价": "price",
-        "涨跌幅": "change_pct",
-        "成交量": "volume",
-    }
-    df = df.rename(columns=rename)
-    keep = ["stock_code", "stock_name", "price", "change_pct", "volume"]
-    df = df[[c for c in keep if c in df.columns]]
-    df = df.sort_values("change_pct", ascending=False)
+    board_code = code_map.get(board_name)
+    if not board_code:
+        return [{"error": f"未找到板块 {board_name}"}]
 
-    return df.to_dict(orient="records")
+    # THS 在大量请求后可能短暂限速（首次加载概念代码表需39次请求）
+    # 最多重试2次，间隔1.5s
+    rows = []
+    for attempt in range(3):
+        try:
+            if attempt:
+                time.sleep(1.5)
+            r = requests.get(url_tpl.format(code=board_code), headers=_THS_HEADERS, timeout=10)
+            r.encoding = "gbk"
+            rows = _ROW_RE.findall(r.text)
+            if rows:
+                break
+        except Exception as e:
+            if attempt == 2:
+                return [{"error": f"THS请求失败: {e}"}]
+
+    result = []
+    for code, name, price_s, chg_s in rows:
+        try:
+            result.append({
+                "stock_code": code,
+                "stock_name": name.strip(),
+                "price": float(price_s),
+                "change_pct": float(chg_s),
+            })
+        except (ValueError, TypeError):
+            continue
+
+    result.sort(key=lambda x: x.get("change_pct", 0), reverse=True)
+    return result

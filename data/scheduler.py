@@ -141,7 +141,6 @@ def bootstrap_breadth_history(days: int = 60) -> dict:
 
         if need_zt:
             try:
-                import akshare as ak
                 from data.fetchers import _AK_LOCK
                 zt_rows = fetch_zt_pool(date_key)
                 zt_count = len(zt_rows) if (zt_rows and "error" not in zt_rows[0]) else 0

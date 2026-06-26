@@ -54,10 +54,3 @@ def fetch_stock_fundamental(code: str) -> dict:
     except Exception as e:
         return {"error": str(e)}
 
-
-def fetch_fundamentals_batch(codes: list[str]) -> dict[str, dict]:
-    """批量拉取，返回 {code: fundamental_dict}"""
-    result = {}
-    for code in codes:
-        result[code] = fetch_stock_fundamental(code)
-    return result

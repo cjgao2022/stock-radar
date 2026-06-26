@@ -86,6 +86,7 @@ stock-radar/
 | `stock_board_industry_summary_ths()` | 行业板块汇总：涨跌幅、上涨/下跌家数、领涨股、净流入 | 板块页行业 Tab |
 | `stock_fund_flow_industry(symbol="即时")` | 行业资金流向排行（净额降序） | 首页行业资金流 TOP10 |
 | `stock_fund_flow_individual(stock, market)` | 个股资金流向明细 | 个股详情页（预留） |
+| `stock_fund_flow_individual(symbol="即时")` | 全市场个股主力净流入排行（不区分超大单/散户） | 个股页主力资金面板 |
 | `stock_board_industry_index_ths(symbol, start_date, end_date)` | 行业板块近 N 日 K 线 | 板块详情页 K 线图 |
 | `stock_board_concept_index_ths(symbol, start_date, end_date)` | 概念板块近 N 日 K 线 | 板块详情页 K 线图 |
 
@@ -98,7 +99,7 @@ stock-radar/
 ### 4. AKShare 东方财富（East Money） — 涨停/龙虎榜/构成股
 
 **文件**：`fetchers/flow.py`、`fetchers/boards.py`、`fetchers/market.py`
-**注意**：东方财富 `push2.eastmoney.com` 在当前网络环境被代理封锁，板块构成股接口受此影响
+**注意**：东方财富 `push2.eastmoney.com` 在当前网络环境被代理封锁，板块构成股已改用 THS HTML 接口替代
 
 | AKShare 函数 | 用途 | 页面 | 网络依赖 |
 |-------------|------|------|---------|
@@ -174,11 +175,12 @@ stock-radar/
 | 概念板块列表 | THS | `stock_fund_flow_concept(symbol="即时")` |
 | 行业板块列表 | THS | `stock_board_industry_summary_ths()` |
 | 行业资金流向 | THS | `stock_fund_flow_industry(symbol="即时")` |
-| 个股资金流向 | THS | `stock_fund_flow_individual()` |
+| 个股资金流向（明细） | THS | `stock_fund_flow_individual(stock, market)` |
+| 个股主力净流入排行 | THS | `stock_fund_flow_individual(symbol="即时")` |
 | 板块 K 线（日K/月K/年K） | THS | `stock_board_industry/concept_index_ths()`；月K/年K 由 Python pandas resample 日线合成（1500/1800日）|
 | ETF 规模/折溢价率 | 东方财富 | `fund_etf_spot_em()`；字段：`总市值`（÷1e8=亿元）、`基金折价率`（%，正为折价）；30分钟缓存 |
 | 涨停板 | 东方财富 | `stock_zt_pool_em()` |
-| 板块构成股 | 东方财富 | `stock_board_concept/industry_cons_em()`（push2 易被封） |
+| 板块构成股 | THS HTML | `q.10jqka.com.cn/thshy/detail/code/{code}/`（行业）/ `gn/detail/code/{code}/`（概念）；解析涨跌幅前20只；板块代码通过 `stock_board_industry/concept_name_ths()` 获取，24h模块缓存 |
 | 龙虎榜 | 东方财富 | `stock_lhb_detail_em(start_date, end_date)`（必传日期） |
 | 市场情绪（涨跌家数） | 新浪（via AKShare） | `stock_zh_a_spot()` |
 | A股公告（持仓股当日） | 东方财富 | `stock_individual_notice_report(security, symbol, begin_date, end_date)`；空结果时 AKShare 内部报 KeyError，已 try/except 兜底 |
