@@ -6,7 +6,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 from data.fetchers.stocks import fetch_watchlist, fetch_etf_watchlist, search_stock, search_etf, fetch_stock_kline, fetch_quotes, fetch_etf_meta
 from data.fetchers.flow import fetch_stock_flow, fetch_stock_flow_rank_all
-from data.fetchers.fundamentals import fetch_stock_fundamental
+from data.fetchers.fundamentals import fetch_stock_fundamental, fetch_stock_financials_history
 from data.watchlist_store import add_stock, remove_stock, add_etf, remove_etf, update_stock_cost, update_etf_cost
 from data.cache import get_cached
 
@@ -16,7 +16,7 @@ class CostBody(BaseModel):
     shares: Optional[float] = None
 
 router = APIRouter(prefix="/api/stocks")
-_KLINE_TTL = {"intraday": 60, "daily": 300, "monthly": 3600, "yearly": 3600}
+_KLINE_TTL = {"intraday": 60, "daily": 300, "weekly": 1800, "monthly": 3600, "yearly": 3600}
 
 
 @router.get("/watchlist")
@@ -185,6 +185,14 @@ def api_fundamentals(codes: str = ""):
         key = f"fund_{code}_{today}"
         result[code] = get_cached(key, 21600, lambda c=code: fetch_stock_fundamental(c))
     return result
+
+
+@router.get("/{code}/financials")
+def api_stock_financials(code: str):
+    """个股近8期财务指标（THS，6小时缓存）"""
+    today = _date.today()
+    key = f"financials_{code}_{today}"
+    return get_cached(key, 21600, lambda: fetch_stock_financials_history(code))
 
 
 @router.get("/{code}/flow")

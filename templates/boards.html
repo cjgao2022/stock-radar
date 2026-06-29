@@ -86,6 +86,35 @@
   </div>
 </div>
 
+<!-- 行业轮动 -->
+<div class="panel mb-3" id="rotation-panel">
+  <div class="panel-hd">
+    <div class="hd-title"><div class="accent-bar"></div>行业轮动</div>
+    <div class="d-flex align-items-center gap-2">
+      <span style="font-size:.72rem;color:var(--text3)">多周期累计涨跌（历史快照，盘后自动积累）</span>
+      <button class="days-btn" id="rot-load-btn" onclick="loadRotation()" style="font-size:.7rem;padding:3px 10px">加载</button>
+    </div>
+  </div>
+  <div id="rot-body" style="display:none">
+    <div class="table-responsive">
+      <table class="data-table" id="rot-table">
+        <thead>
+          <tr>
+            <th>行业</th>
+            <th class="text-end sortable" onclick="sortRot('d5')" >5日</th>
+            <th class="text-end sortable" onclick="sortRot('d20')">20日</th>
+            <th class="text-end sortable" onclick="sortRot('d60')">60日</th>
+            <th class="text-end" style="font-size:.7rem;color:var(--text3)">快照天数</th>
+          </tr>
+        </thead>
+        <tbody id="rot-tbody">
+          <tr><td colspan="5" class="text-center text-muted py-3">点击「加载」获取数据</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <!-- 筛选栏 -->
 <div class="d-flex justify-content-between align-items-center mb-2 px-1">
   <div class="tab-seg">
@@ -252,5 +281,46 @@ function switchTab(type, btn) {
 }
 
 loadBoards('concept');
+
+// ── 行业轮动 ────────────────────────────────────────────────
+let _rotData=[], _rotSort={key:'d20',desc:true};
+function sortRot(key){
+  if(_rotSort.key===key)_rotSort.desc=!_rotSort.desc;
+  else{_rotSort.key=key;_rotSort.desc=true;}
+  renderRotation();
+}
+function renderRotation(){
+  const tbody=document.getElementById('rot-tbody');
+  const rows=[..._rotData].sort((a,b)=>{
+    const av=a[_rotSort.key]??-Infinity,bv=b[_rotSort.key]??-Infinity;
+    return _rotSort.desc?bv-av:av-bv;
+  });
+  if(!rows.length){
+    tbody.innerHTML='<tr><td colspan="5" class="text-center text-muted py-3">暂无快照数据（需盘后积累历史）</td></tr>';
+    return;
+  }
+  tbody.innerHTML=rows.map(r=>{
+    function cell(v){
+      if(v==null)return'<td class="text-end text-muted" style="font-size:.76rem">-</td>';
+      const cls=v>0?'up':v<0?'down':'flat';
+      return `<td class="text-end num ${cls}" style="font-size:.82rem;font-weight:700">${v>0?'+':''}${v.toFixed(2)}%</td>`;
+    }
+    return `<tr style="cursor:pointer" onclick="switchTab('industry');document.getElementById('search-input').value='${r.name.replace(/'/g,'')}'">
+      <td class="fw-semibold" style="font-size:.84rem">${r.name}</td>
+      ${cell(r.d5)}${cell(r.d20)}${cell(r.d60)}
+      <td class="text-end text-muted" style="font-size:.72rem">${r.days}天</td>
+    </tr>`;
+  }).join('');
+}
+function loadRotation(){
+  const btn=document.getElementById('rot-load-btn');
+  btn.textContent='加载中...';btn.disabled=true;
+  fetch('/api/boards/rotation?board_type=industry').then(r=>r.json()).then(data=>{
+    _rotData=Array.isArray(data)?data:[];
+    document.getElementById('rot-body').style.display='';
+    btn.textContent='刷新';btn.disabled=false;
+    renderRotation();
+  }).catch(()=>{btn.textContent='加载';btn.disabled=false;});
+}
 </script>
 {% endblock %}

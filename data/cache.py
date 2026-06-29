@@ -229,6 +229,40 @@ def load_lhb_history(date: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def load_board_rotation(board_type: str = "industry") -> list[dict]:
+    """从 board_snapshot 计算各板块多周期累计涨跌幅（5/20/60 日）。"""
+    with _conn() as c:
+        c.row_factory = sqlite3.Row
+        rows = c.execute(
+            "SELECT name, date, change_pct FROM board_snapshot WHERE board_type=? ORDER BY name, date ASC",
+            (board_type,),
+        ).fetchall()
+
+    boards: dict[str, dict] = {}
+    for row in rows:
+        boards.setdefault(row["name"], {})[row["date"]] = row["change_pct"] or 0.0
+
+    def compound(pcts: list[float]) -> float:
+        r = 1.0
+        for p in pcts:
+            r *= 1 + p / 100
+        return round((r - 1) * 100, 2)
+
+    result = []
+    for name, date_map in boards.items():
+        dates = sorted(date_map)
+        pcts = [date_map[d] for d in dates]
+        n = len(pcts)
+        result.append({
+            "name": name,
+            "d5":  compound(pcts[-5:])  if n >= 5  else None,
+            "d20": compound(pcts[-20:]) if n >= 20 else None,
+            "d60": compound(pcts[-60:]) if n >= 60 else None,
+            "days": n,
+        })
+    return sorted(result, key=lambda x: (x["d20"] or 0), reverse=True)
+
+
 def load_lhb_dates(limit: int = 10) -> list[str]:
     """返回最近 N 个有记录的交易日（降序）"""
     with _conn() as c:

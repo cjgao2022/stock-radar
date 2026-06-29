@@ -3,7 +3,7 @@
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter
 from data.fetchers.boards import fetch_board_list, fetch_board_constituents, fetch_board_kline
-from data.cache import get_cached, load_board_snapshot, save_board_constituents, load_board_constituents
+from data.cache import get_cached, load_board_snapshot, save_board_constituents, load_board_constituents, load_board_rotation
 from pathlib import Path
 import yaml
 
@@ -31,6 +31,12 @@ def api_board_list(board_type: str = "concept", sort: str = "change_pct", order:
     except Exception:
         pass
     return rows
+
+
+@router.get("/rotation")
+def api_board_rotation(board_type: str = "industry"):
+    """板块多周期轮动数据（从 board_snapshot 历史快照计算）"""
+    return load_board_rotation(board_type)
 
 
 @router.get("/{board_type}/{board_name}/kline")

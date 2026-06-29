@@ -1,0 +1,282 @@
+{% extends "base.html" %}
+{% block title %}{{ code }} 个股详情 - 股票雷达{% endblock %}
+
+{% block head %}
+<style>
+  .detail-header {
+    display:flex;flex-wrap:wrap;align-items:center;gap:16px;
+    padding:14px 18px;border-bottom:1px solid var(--border);
+  }
+  .detail-price { font-size:1.8rem;font-weight:900;font-variant-numeric:tabular-nums; }
+  .detail-meta  { display:flex;flex-wrap:wrap;gap:10px;margin-top:4px; }
+  .dm-item { display:flex;flex-direction:column;gap:1px; }
+  .dm-label { font-size:.64rem;color:var(--text3);letter-spacing:.3px; }
+  .dm-val   { font-size:.88rem;font-weight:700;font-variant-numeric:tabular-nums; }
+
+  .ind-btn-row { display:flex;gap:5px;margin-left:8px; }
+  .kline-area  { padding:0 4px 10px; }
+
+  .flow-item { display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border); }
+  .flow-item:last-child { border-bottom:none; }
+  .flow-lbl { font-size:.76rem;color:var(--text2); }
+  .flow-val { font-size:.82rem;font-weight:700;font-variant-numeric:tabular-nums; }
+
+  .fin-label { font-size:.68rem;color:var(--text3);margin-bottom:2px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-3">
+  <a href="/stocks" class="text-decoration-none" style="font-size:.83rem;color:var(--text3)">← 持仓</a>
+  <span style="color:var(--border2)">／</span>
+  <span style="font-size:.83rem;color:var(--text2)" id="detail-name">{{ code }}</span>
+</div>
+
+<!-- 顶部信息栏 -->
+<div class="panel mb-3">
+  <div class="detail-header">
+    <div>
+      <div style="font-size:.78rem;color:var(--text3);margin-bottom:2px">
+        <span id="d-code">{{ code }}</span>
+      </div>
+      <div style="display:flex;align-items:baseline;gap:10px">
+        <span class="detail-price num" id="d-price">--</span>
+        <span class="chg-badge flat" id="d-chg-badge">--</span>
+        <span class="num" style="font-size:.9rem" id="d-chg-abs">--</span>
+      </div>
+    </div>
+    <div class="detail-meta">
+      <div class="dm-item"><div class="dm-label">成交额</div><div class="dm-val num" id="d-amount">--</div></div>
+      <div class="dm-item"><div class="dm-label">市盈率 PE</div><div class="dm-val num" id="d-pe">--</div></div>
+      <div class="dm-item"><div class="dm-label">市净率 PB</div><div class="dm-val num" id="d-pb">--</div></div>
+      <div class="dm-item"><div class="dm-label">ROE</div><div class="dm-val num" id="d-roe">--</div></div>
+      <div class="dm-item"><div class="dm-label">净利润增速</div><div class="dm-val num" id="d-pyoy">--</div></div>
+      <div class="dm-item"><div class="dm-label">今日最高</div><div class="dm-val num up" id="d-high">--</div></div>
+      <div class="dm-item"><div class="dm-label">今日最低</div><div class="dm-val num down" id="d-low">--</div></div>
+      <div class="dm-item"><div class="dm-label">昨日收盘</div><div class="dm-val num" id="d-prev">--</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- K线 -->
+<div class="panel mb-3">
+  <div class="panel-hd">
+    <div class="hd-title"><div class="accent-bar"></div>K线图</div>
+    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px">
+      <div class="d-flex gap-1">
+        <button class="days-btn active" id="dbtn-intraday" onclick="detailLoadKline('intraday')">分时</button>
+        <button class="days-btn"        id="dbtn-daily"    onclick="detailLoadKline('daily')">日K</button>
+        <button class="days-btn"        id="dbtn-weekly"   onclick="detailLoadKline('weekly')">周K</button>
+        <button class="days-btn"        id="dbtn-monthly"  onclick="detailLoadKline('monthly')">月K</button>
+        <button class="days-btn"        id="dbtn-yearly"   onclick="detailLoadKline('yearly')">年K</button>
+      </div>
+      <div class="d-flex gap-1" id="d-ma-btns" style="display:none!important">
+        <button class="days-btn active" id="d-ma-btn-5"  onclick="detailToggleMA(5)"  style="color:#f5a623;border-color:#f5a623;font-size:.65rem;padding:2px 7px">MA5</button>
+        <button class="days-btn active" id="d-ma-btn-10" onclick="detailToggleMA(10)" style="color:#7ed321;border-color:#7ed321;font-size:.65rem;padding:2px 7px">MA10</button>
+        <button class="days-btn active" id="d-ma-btn-20" onclick="detailToggleMA(20)" style="color:#bd10e0;border-color:#bd10e0;font-size:.65rem;padding:2px 7px">MA20</button>
+      </div>
+      <div class="ind-btn-row" id="d-ind-btns" style="display:none!important">
+        <button class="days-btn" id="d-ind-macd" onclick="detailToggleInd('macd')" style="font-size:.65rem;padding:2px 8px">MACD</button>
+        <button class="days-btn" id="d-ind-kdj"  onclick="detailToggleInd('kdj')"  style="font-size:.65rem;padding:2px 8px">KDJ</button>
+        <button class="days-btn" id="d-ind-rsi"  onclick="detailToggleInd('rsi')"  style="font-size:.65rem;padding:2px 8px">RSI</button>
+      </div>
+    </div>
+  </div>
+  <div class="kline-area">
+    <div id="detail-kline-chart" style="width:100%;height:480px;transition:height .2s"></div>
+  </div>
+</div>
+
+<!-- 资金流向 + 财务趋势 -->
+<div class="row g-3 mb-3">
+  <div class="col-md-4">
+    <div class="panel h-100">
+      <div class="panel-hd">
+        <div class="hd-title"><div class="accent-bar"></div>个股资金流</div>
+        <span style="font-size:.72rem;color:var(--text3)">今日（同花顺）</span>
+      </div>
+      <div class="panel-body" id="flow-panel">
+        <div class="text-center text-muted py-4" style="font-size:.82rem">加载中...</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-8">
+    <div class="panel h-100">
+      <div class="panel-hd">
+        <div class="hd-title"><div class="accent-bar"></div>财务趋势</div>
+        <span style="font-size:.72rem;color:var(--text3)">近8期（同花顺）</span>
+      </div>
+      <div style="padding:8px 4px 12px">
+        <div id="fin-chart" style="width:100%;height:220px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const _code = '{{ code }}';
+let _detailChart = null;
+let _dActiveInd = null, _dCachedData = null, _dCachedPeriod = null;
+const _dMaVisible = {5:true,10:true,20:true};
+
+function fmtA(v){ if(v==null)return'--'; return v>=1e8?(v/1e8).toFixed(2)+'亿':v>=1e4?(v/1e4).toFixed(0)+'万':v.toFixed(0); }
+function fmtP(v){ if(v==null)return'--'; return(v>=0?'+':'')+Number(v).toFixed(2)+'%'; }
+function fmtM(v){ if(v==null)return'--'; const a=Math.abs(v); return(v>=0?'+':'-')+(a>=1e8?(a/1e8).toFixed(2)+'亿':a>=1e4?(a/1e4).toFixed(0)+'万':a.toFixed(0)); }
+function pCls(v){ return v>0?'up':v<0?'down':'flat'; }
+
+// ── 实时报价 ────────────────────────────────────────────────
+fetch(`/api/stocks/batch_quotes?codes=${_code}`).then(r=>r.json()).then(list=>{
+  const d=(list||[]).find(x=>x.code===_code);
+  if(!d) return;
+  document.getElementById('detail-name').textContent=d.name||_code;
+  document.title=`${d.name||_code} ${_code} - 股票雷达`;
+  const cls=pCls(d.change_pct);
+  document.getElementById('d-price').textContent=d.price!=null?Number(d.price).toFixed(2):'--';
+  document.getElementById('d-price').className=`detail-price num ${cls}`;
+  const badge=document.getElementById('d-chg-badge');
+  badge.className=`chg-badge ${cls}`;
+  badge.textContent=fmtP(d.change_pct);
+  const abs=d.price!=null&&d.prev_close!=null?d.price-d.prev_close:null;
+  const absEl=document.getElementById('d-chg-abs');
+  absEl.className=`num ${cls}`;
+  absEl.textContent=abs!=null?(abs>=0?'+':'')+abs.toFixed(2):'--';
+  document.getElementById('d-amount').textContent=fmtA(d.amount);
+  document.getElementById('d-high').textContent=d.high!=null?Number(d.high).toFixed(2):'--';
+  document.getElementById('d-low').textContent=d.low!=null?Number(d.low).toFixed(2):'--';
+  document.getElementById('d-prev').textContent=d.prev_close!=null?Number(d.prev_close).toFixed(2):'--';
+});
+
+// ── 基本面 ─────────────────────────────────────────────────
+fetch(`/api/stocks/fundamentals?codes=${_code}`).then(r=>r.json()).then(fund=>{
+  const f=fund[_code]||{};
+  fetch(`/api/stocks/batch_quotes?codes=${_code}`).then(r=>r.json()).then(list=>{
+    const d=(list||[]).find(x=>x.code===_code);
+    if(!d) return;
+    const pe=f.eps&&d.price?d.price/f.eps:null;
+    const pb=f.bvps&&d.price?d.price/f.bvps:null;
+    document.getElementById('d-pe').textContent=pe!=null?pe.toFixed(1)+'x':'--';
+    document.getElementById('d-pb').textContent=pb!=null?pb.toFixed(2)+'x':'--';
+    document.getElementById('d-roe').textContent=f.roe!=null?f.roe.toFixed(1)+'%':'--';
+    document.getElementById('d-pyoy').textContent=f.profit_yoy!=null?fmtP(f.profit_yoy):'--';
+    const pyoyEl=document.getElementById('d-pyoy');
+    if(f.profit_yoy!=null) pyoyEl.className=`dm-val num ${pCls(f.profit_yoy)}`;
+  });
+});
+
+// ── K线 ────────────────────────────────────────────────────
+window.addEventListener('load',()=>{
+  _detailChart=echarts.init(document.getElementById('detail-kline-chart'));
+  window.addEventListener('resize',()=>_detailChart&&_detailChart.resize());
+  detailLoadKline('intraday');
+});
+
+function _detailSetHeight(hasInd){
+  document.getElementById('detail-kline-chart').style.height=(hasInd?600:480)+'px';
+  _detailChart.resize();
+}
+
+function detailLoadKline(period){
+  ['intraday','daily','weekly','monthly','yearly'].forEach(p=>
+    document.getElementById('dbtn-'+p).classList.toggle('active',p===period));
+  const isCandle=period!=='intraday';
+  document.getElementById('d-ma-btns').style.cssText=isCandle?'':'display:none!important';
+  document.getElementById('d-ind-btns').style.cssText=isCandle?'':'display:none!important';
+  if(!isCandle){_dActiveInd=null;['macd','kdj','rsi'].forEach(n=>document.getElementById('d-ind-'+n).classList.remove('active'));}
+  _detailChart.showLoading({text:'',maskColor:'transparent',spinnerRadius:12,lineWidth:2,color:'var(--accent)'});
+  fetch(`/api/stocks/${_code}/kline?period=${period}`).then(r=>r.json()).then(d=>{
+    _detailChart.hideLoading();
+    if(d.error||!d.data||!d.data.length){
+      _detailChart.setOption({graphic:[{type:'text',left:'center',top:'middle',
+        style:{text:'暂无数据',fill:'var(--text3)',fontSize:14}}]});
+      return;
+    }
+    if(d.type==='line'){
+      _detailSetHeight(false);
+      _klineIntraday(d.data,d.prev_close,_detailChart);
+    } else {
+      _dCachedData=d.data; _dCachedPeriod=period;
+      _detailSetHeight(_dActiveInd!=null);
+      _klineCandle(d.data,period,_detailChart,_dActiveInd);
+    }
+  }).catch(()=>_detailChart.hideLoading());
+}
+
+function detailToggleMA(n){
+  _dMaVisible[n]=!_dMaVisible[n];
+  const btn=document.getElementById('d-ma-btn-'+n);
+  btn.classList.toggle('active',_dMaVisible[n]);
+  btn.style.opacity=_dMaVisible[n]?'1':'.35';
+  if(_detailChart){
+    const names={5:'MA5',10:'MA10',20:'MA20'};
+    _detailChart.dispatchAction({type:_dMaVisible[n]?'legendSelect':'legendUnSelect',name:names[n]});
+  }
+}
+
+function detailToggleInd(name){
+  _dActiveInd=_dActiveInd===name?null:name;
+  ['macd','kdj','rsi'].forEach(n=>document.getElementById('d-ind-'+n).classList.toggle('active',_dActiveInd===n));
+  if(_dCachedData){
+    _detailSetHeight(_dActiveInd!=null);
+    _klineCandle(_dCachedData,_dCachedPeriod,_detailChart,_dActiveInd);
+  }
+}
+
+// ── 资金流向 ────────────────────────────────────────────────
+fetch(`/api/stocks/${_code}/flow`).then(r=>r.json()).then(d=>{
+  const panel=document.getElementById('flow-panel');
+  if(!d||d.error){
+    panel.innerHTML='<div class="text-center text-muted py-3" style="font-size:.8rem">暂无数据（交易日盘中可用）</div>';
+    return;
+  }
+  const rows=[
+    ['主力净流入',d.main_net],['超大单净额',d.super_big_net],
+    ['大单净额',d.big_net],['中单净额',d.mid_net],['散户净额',d.retail_net],
+  ];
+  panel.innerHTML=rows.map(([lbl,val])=>{
+    if(val==null) return '';
+    const cls=val>=0?'up':'down';
+    return `<div class="flow-item">
+      <span class="flow-lbl">${lbl}</span>
+      <span class="flow-val ${cls}">${fmtM(val)}</span>
+    </div>`;
+  }).filter(Boolean).join('');
+  if(!panel.innerHTML) panel.innerHTML='<div class="text-center text-muted py-3" style="font-size:.8rem">暂无数据</div>';
+}).catch(()=>{
+  document.getElementById('flow-panel').innerHTML='<div class="text-center text-muted py-3" style="font-size:.8rem">加载失败</div>';
+});
+
+// ── 财务趋势图 ───────────────────────────────────────────────
+fetch(`/api/stocks/${_code}/financials`).then(r=>r.json()).then(d=>{
+  if(d.error||!d.periods) return;
+  const finChart=echarts.init(document.getElementById('fin-chart'));
+  window.addEventListener('resize',()=>finChart.resize());
+  // 标签截短（按季度取最后4位 如"12-31"）
+  const labels=d.periods.map(p=>String(p).slice(5)||String(p));
+  finChart.setOption({
+    backgroundColor:'transparent',animation:false,
+    tooltip:{trigger:'axis',backgroundColor:'rgba(13,21,38,.92)',borderColor:'rgba(255,255,255,.1)',
+      textStyle:{color:'#e0e8f8',fontSize:11}},
+    legend:{data:['ROE','净利润增速','营收增速'],textStyle:{color:'var(--text2)',fontSize:10},bottom:0},
+    grid:{left:50,right:50,top:10,bottom:36},
+    xAxis:{type:'category',data:labels,axisLabel:{color:'#5a6a8a',fontSize:9},
+      axisLine:{lineStyle:{color:'#2a3550'}},splitLine:{show:false}},
+    yAxis:[
+      {type:'value',name:'%',nameTextStyle:{color:'#5a6a8a',fontSize:9},
+       axisLabel:{color:'#5a6a8a',fontSize:9,formatter:v=>v+'%'},
+       splitLine:{lineStyle:{color:'#1e2c48',type:'dashed'}}},
+    ],
+    series:[
+      {name:'ROE',type:'line',data:d.roe,smooth:true,symbol:'circle',symbolSize:4,
+       lineStyle:{width:1.5,color:'#3d7efc'},itemStyle:{color:'#3d7efc'}},
+      {name:'净利润增速',type:'bar',data:d.profit_yoy,barMaxWidth:14,
+       itemStyle:{color:p=>(p.value??0)>=0?'rgba(232,55,74,.65)':'rgba(24,163,97,.65)'}},
+      {name:'营收增速',type:'bar',data:d.rev_yoy,barMaxWidth:14,barGap:'20%',
+       itemStyle:{color:p=>(p.value??0)>=0?'rgba(61,126,252,.55)':'rgba(100,120,200,.55)'}},
+    ]
+  });
+}).catch(()=>{});
+</script>
+{% endblock %}

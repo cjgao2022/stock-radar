@@ -428,6 +428,7 @@
         <div class="d-flex gap-1 ms-2">
           <button class="days-btn active" onclick="loadModalKline('intraday')" id="kbtn-intraday">分时</button>
           <button class="days-btn"        onclick="loadModalKline('daily')"    id="kbtn-daily">日K</button>
+          <button class="days-btn"        onclick="loadModalKline('weekly')"   id="kbtn-weekly">周K</button>
           <button class="days-btn"        onclick="loadModalKline('monthly')"  id="kbtn-monthly">月K</button>
           <button class="days-btn"        onclick="loadModalKline('yearly')"   id="kbtn-yearly">年K</button>
         </div>
@@ -436,10 +437,15 @@
           <button class="days-btn active" id="ma-btn-10" onclick="toggleMA(10)" style="color:#7ed321;border-color:#7ed321;font-size:.68rem;padding:2px 7px">MA10</button>
           <button class="days-btn active" id="ma-btn-20" onclick="toggleMA(20)" style="color:#bd10e0;border-color:#bd10e0;font-size:.68rem;padding:2px 7px">MA20</button>
         </div>
+        <div class="d-flex gap-1 ms-2" id="ind-btns" style="display:none!important">
+          <button class="days-btn" id="ind-btn-macd" onclick="toggleIndicator('macd')" style="font-size:.65rem;padding:2px 8px">MACD</button>
+          <button class="days-btn" id="ind-btn-kdj"  onclick="toggleIndicator('kdj')"  style="font-size:.65rem;padding:2px 8px">KDJ</button>
+          <button class="days-btn" id="ind-btn-rsi"  onclick="toggleIndicator('rsi')"  style="font-size:.65rem;padding:2px 8px">RSI</button>
+        </div>
         <button class="kline-close" data-bs-dismiss="modal">✕</button>
       </div>
       <div class="modal-body p-2">
-        <div id="kline-modal-chart" style="width:100%;height:440px;"></div>
+        <div id="kline-modal-chart" style="width:100%;height:440px;transition:height .2s"></div>
       </div>
     </div>
   </div>
@@ -539,29 +545,75 @@ document.getElementById('code-confirm-overlay').addEventListener('click', e => {
 // ── K线弹框 ──
 let _klineModal=null, _klineChart=null, _klineCode='', _klineName='', _klineIsEtf=false;
 const _maVisible={5:true,10:true,20:true};
+let _activeIndicator=null, _cachedKlineData=null, _cachedKlinePeriod=null;
 
 function toggleMA(n){
   _maVisible[n]=!_maVisible[n];
   const btn=document.getElementById('ma-btn-'+n);
-  if(_maVisible[n]){
-    btn.classList.add('active');
-    btn.style.opacity='1';
-  } else {
-    btn.classList.remove('active');
-    btn.style.opacity='.35';
-  }
+  btn.classList.toggle('active',_maVisible[n]);
+  btn.style.opacity=_maVisible[n]?'1':'.35';
   if(_klineChart){
-    const seriesNames={'5':'MA5','10':'MA10','20':'MA20'};
-    _klineChart.dispatchAction({type:_maVisible[n]?'legendSelect':'legendUnSelect',name:seriesNames[String(n)]});
+    const names={'5':'MA5','10':'MA10','20':'MA20'};
+    _klineChart.dispatchAction({type:_maVisible[n]?'legendSelect':'legendUnSelect',name:names[String(n)]});
   }
+}
+
+function toggleIndicator(name){
+  _activeIndicator = _activeIndicator===name ? null : name;
+  ['macd','kdj','rsi'].forEach(n=>{
+    const btn=document.getElementById('ind-btn-'+n);
+    btn.classList.toggle('active', _activeIndicator===n);
+  });
+  if(_cachedKlineData) _klineCandle(_cachedKlineData, _cachedKlinePeriod, _klineChart);
+}
+
+// ── 技术指标计算 ──────────────────────────────────────────────
+function _calcEMA(arr,n){
+  const k=2/(n+1), out=[];
+  arr.forEach((v,i)=>out.push(i===0?v:out[i-1]+(v-out[i-1])*k));
+  return out;
+}
+function calcMACD(data){
+  const c=data.map(d=>d.c);
+  const e12=_calcEMA(c,12),e26=_calcEMA(c,26);
+  const dif=e12.map((v,i)=>+(v-e26[i]).toFixed(3));
+  const dea=_calcEMA(dif,9).map(v=>+v.toFixed(3));
+  const bar=dif.map((v,i)=>+((v-dea[i])*2).toFixed(3));
+  return {dif,dea,bar};
+}
+function calcKDJ(data){
+  const K=[],D=[],J=[];let pk=50,pd=50;
+  data.forEach((d,i)=>{
+    const sl=data.slice(Math.max(0,i-8),i+1);
+    const lo=Math.min(...sl.map(x=>x.l)),hi=Math.max(...sl.map(x=>x.h));
+    const rsv=hi===lo?50:(d.c-lo)/(hi-lo)*100;
+    const k=+(pk*2/3+rsv/3).toFixed(2),dd=+(pd*2/3+k/3).toFixed(2),j=+(3*k-2*dd).toFixed(2);
+    K.push(k);D.push(dd);J.push(j);pk=k;pd=dd;
+  });
+  return {K,D,J};
+}
+function calcRSI(data,n=14){
+  const c=data.map(d=>d.c),out=Array(c.length).fill(null);
+  let ag=0,al=0;
+  for(let i=1;i<=n&&i<c.length;i++){const d=c[i]-c[i-1];if(d>0)ag+=d;else al-=d;}
+  ag/=n;al/=n;
+  if(n<c.length)out[n]=al===0?100:+(100-100/(1+ag/al)).toFixed(2);
+  for(let i=n+1;i<c.length;i++){
+    const d=c[i]-c[i-1];
+    ag=(ag*(n-1)+Math.max(d,0))/n;al=(al*(n-1)+Math.max(-d,0))/n;
+    out[i]=al===0?100:+(100-100/(1+ag/al)).toFixed(2);
+  }
+  return out;
 }
 
 function openKlineModal(code, name, isEtf) {
   _klineCode=code; _klineName=name; _klineIsEtf=!!isEtf;
   document.getElementById('kline-modal-name').textContent = name||code;
   document.getElementById('kline-modal-code').textContent = code;
-  ['intraday','daily','monthly','yearly'].forEach(p =>
+  ['intraday','daily','weekly','monthly','yearly'].forEach(p =>
     document.getElementById('kbtn-'+p).classList.toggle('active', p==='intraday'));
+  _activeIndicator=null;
+  ['macd','kdj','rsi'].forEach(n=>document.getElementById('ind-btn-'+n).classList.remove('active'));
   if(!_klineModal) _klineModal = new bootstrap.Modal(document.getElementById('klineModal'));
   _klineModal.show();
 }
@@ -576,11 +628,12 @@ document.getElementById('klineModal').addEventListener('shown.bs.modal', functio
 });
 
 function loadModalKline(period){
-  ['intraday','daily','monthly','yearly'].forEach(p =>
+  ['intraday','daily','weekly','monthly','yearly'].forEach(p =>
     document.getElementById('kbtn-'+p).classList.toggle('active', p===period));
-  // MA buttons only shown for candle charts
-  const maDiv=document.getElementById('ma-btns');
-  maDiv.style.cssText=period==='intraday'?'display:none!important':'';
+  const isCandle=period!=='intraday';
+  document.getElementById('ma-btns').style.cssText=isCandle?'':'display:none!important';
+  document.getElementById('ind-btns').style.cssText=isCandle?'':'display:none!important';
+  if(!isCandle){_activeIndicator=null;['macd','kdj','rsi'].forEach(n=>document.getElementById('ind-btn-'+n).classList.remove('active'));}
   _klineChart.showLoading({text:'',maskColor:'transparent',spinnerRadius:12,lineWidth:2,color:'var(--accent)'});
   const url = _klineIsEtf
     ? `/api/stocks/etf/${_klineCode}/kline?period=${period}`
@@ -593,32 +646,30 @@ function loadModalKline(period){
         style:{text:'暂无数据',fill:'var(--text3)',fontSize:14}}]});
       return;
     }
-    d.type==='line' ? _klineIntraday(d.data, d.prev_close) : _klineCandle(d.data, period);
+    d.type==='line' ? _klineIntraday(d.data,d.prev_close,_klineChart) : _klineCandle(d.data,period,_klineChart);
   }).catch(()=>_klineChart.hideLoading());
 }
 
-function _klineIntraday(data, prevClose){
-  const times=data.map(d=>d.t), prices=data.map(d=>d.c), vols=data.map(d=>d.v);
-  const ref = prevClose!=null ? prevClose : prices[0];
-  const isUp = prices[prices.length-1] >= ref;
-  const clr = isUp ? '#e8374a' : '#18a361';
-  // 对称轴范围，以昨收为中轴
-  const maxDelta = Math.max(...prices.map(p=>Math.abs(p-ref))) * 1.2 || ref*0.03;
-  const axisMin = ref - maxDelta, axisMax = ref + maxDelta;
-  _klineChart.setOption({
-    backgroundColor:'transparent', animation:false,
+// chart 参数默认 _klineChart，供个股详情页复用
+function _klineIntraday(data, prevClose, chart){
+  chart=chart||_klineChart;
+  const times=data.map(d=>d.t),prices=data.map(d=>d.c),vols=data.map(d=>d.v);
+  const ref=prevClose!=null?prevClose:prices[0];
+  const isUp=prices[prices.length-1]>=ref;
+  const clr=isUp?'#e8374a':'#18a361';
+  const maxDelta=Math.max(...prices.map(p=>Math.abs(p-ref)))*1.2||ref*0.03;
+  chart.setOption({
+    backgroundColor:'transparent',animation:false,
     tooltip:{trigger:'axis',axisPointer:{type:'cross'},backgroundColor:'rgba(13,21,38,.92)',
       borderColor:'rgba(255,255,255,.1)',textStyle:{color:'#e0e8f8',fontSize:11},
       formatter:params=>{
-        const pp=params.find(p=>p.seriesIndex===0);
-        if(!pp) return '';
-        const pv=pp.data, pct=((pv-ref)/ref*100).toFixed(2);
-        const pctClr=pv>=ref?'#e8374a':'#18a361';
+        const pp=params.find(p=>p.seriesIndex===0);if(!pp)return'';
+        const pv=pp.data,pct=((pv-ref)/ref*100).toFixed(2);
+        const pc=pv>=ref?'#e8374a':'#18a361';
         const vp=params.find(p=>p.seriesIndex===1);
-        return `${pp.axisValueLabel}<br>价格 <b>${pv.toFixed(2)}</b> <b style="color:${pctClr}">${Number(pct)>=0?'+':''}${pct}%</b>`
-             +(vp?`<br>量 <b>${Math.round(vp.value/100)}手</b>`:'');
-      }
-    },
+        return `${pp.axisValueLabel}<br>价格 <b>${pv.toFixed(2)}</b> <b style="color:${pc}">${Number(pct)>=0?'+':''}${pct}%</b>`
+              +(vp?`<br>量 <b>${Math.round(vp.value/100)}手</b>`:'');
+      }},
     axisPointer:{link:[{xAxisIndex:'all'}]},
     grid:[{left:64,right:54,top:8,height:'62%'},{left:64,right:54,top:'76%',height:'18%'}],
     xAxis:[
@@ -629,10 +680,10 @@ function _klineIntraday(data, prevClose){
        axisLabel:{show:false},axisLine:{lineStyle:{color:'#2a3550'}},splitLine:{show:false}}
     ],
     yAxis:[
-      {type:'value',min:axisMin,max:axisMax,gridIndex:0,
+      {type:'value',min:ref-maxDelta,max:ref+maxDelta,gridIndex:0,
        axisLabel:{color:'#5a6a8a',fontSize:10,formatter:v=>v.toFixed(2)},
        splitLine:{lineStyle:{color:'#1e2c48',type:'dashed'}}},
-      {type:'value',min:axisMin,max:axisMax,gridIndex:0,position:'right',
+      {type:'value',min:ref-maxDelta,max:ref+maxDelta,gridIndex:0,position:'right',
        axisLabel:{color:'#5a6a8a',fontSize:10,formatter:v=>((v-ref)/ref*100).toFixed(1)+'%'},
        splitLine:{show:false},axisLine:{show:false},axisTick:{show:false}},
       {type:'value',gridIndex:1,axisLabel:{show:false},splitLine:{show:false}}
@@ -640,66 +691,111 @@ function _klineIntraday(data, prevClose){
     series:[
       {type:'line',data:prices,xAxisIndex:0,yAxisIndex:0,smooth:false,symbol:'none',
        lineStyle:{width:1.5,color:clr},
-       markLine:{silent:true,symbol:'none',
-         lineStyle:{type:'dashed',color:'rgba(140,155,180,.45)',width:1},
+       markLine:{silent:true,symbol:'none',lineStyle:{type:'dashed',color:'rgba(140,155,180,.45)',width:1},
          label:{show:false},data:[{yAxis:ref}]},
        areaStyle:{color:{type:'linear',x:0,y:0,x2:0,y2:1,colorStops:[
-         {offset:0,color:isUp?'rgba(232,55,74,.25)':'rgba(24,163,97,.25)'},
-         {offset:1,color:'rgba(0,0,0,0)'}]}}},
+         {offset:0,color:isUp?'rgba(232,55,74,.25)':'rgba(24,163,97,.25)'},{offset:1,color:'rgba(0,0,0,0)'}]}}},
       {type:'bar',data:vols,xAxisIndex:1,yAxisIndex:2,itemStyle:{color:'rgba(93,142,218,.5)'}}
     ]
-  }, true);
-  _klineChart.resize();
+  },true);
+  chart.resize();
 }
 
-function _klineCandle(data, period){
+// ind: 传入覆盖全局 _activeIndicator，供非弹框图表调用
+function _klineCandle(data, period, chart, ind){
+  chart=chart||_klineChart;
+  const activeInd=ind!==undefined?ind:_activeIndicator;
+  // 弹框缓存用于指标切换时免重新请求
+  if(chart===_klineChart){_cachedKlineData=data;_cachedKlinePeriod=period;}
   const dates=data.map(d=>d.d);
   const ohlc=data.map(d=>[d.o,d.c,d.l,d.h]);
   const vols=data.map(d=>({value:d.v,itemStyle:{color:d.c>=d.o?'rgba(232,55,74,.6)':'rgba(24,163,97,.6)'}}));
-  function calcMA(n){
-    return data.map((_,i)=>i<n-1?null:+(data.slice(i-n+1,i+1).reduce((s,d)=>s+d.c,0)/n).toFixed(2));
+  function calcMA(n){return data.map((_,i)=>i<n-1?null:+(data.slice(i-n+1,i+1).reduce((s,d)=>s+d.c,0)/n).toFixed(2));}
+  const initStart=period==='yearly'?0:Math.max(0,Math.round((1-Math.min(data.length,120)/data.length)*100));
+
+  // 弹框图表高度：由 _klineCandle 负责；详情页图表高度由调用方负责
+  const hasInd=activeInd!=null;
+  if(chart===_klineChart||chart==null){
+    const chartEl=document.getElementById('kline-modal-chart');
+    if(chartEl) chartEl.style.height=(hasInd?560:440)+'px';
   }
-  const initStart = period==='yearly' ? 0 : Math.max(0, Math.round((1-Math.min(data.length,120)/data.length)*100));
-  _klineChart.setOption({
-    backgroundColor:'transparent', animation:false,
-    legend:{show:false},
+  chart.resize();
+
+  let indSeries=[],indXAxis=[],indYAxis=[];
+  if(hasInd){
+    const indCfg={xAxisIndex:2,yAxisIndex:2,smooth:false,symbol:'none'};
+    if(activeInd==='macd'){
+      const {dif,dea,bar}=calcMACD(data);
+      indSeries=[
+        {type:'line',name:'DIF',data:dif,...indCfg,lineStyle:{width:1.2,color:'#f5a623'}},
+        {type:'line',name:'DEA',data:dea,...indCfg,lineStyle:{width:1.2,color:'#7ed321'}},
+        {type:'bar',name:'MACD',data:bar,xAxisIndex:2,yAxisIndex:2,barMaxWidth:4,
+         itemStyle:{color:p=>p.value>=0?'rgba(232,55,74,.8)':'rgba(24,163,97,.8)'}},
+      ];
+    } else if(activeInd==='kdj'){
+      const {K,D,J}=calcKDJ(data);
+      indSeries=[
+        {type:'line',name:'K',data:K,...indCfg,lineStyle:{width:1.2,color:'#f5a623'}},
+        {type:'line',name:'D',data:D,...indCfg,lineStyle:{width:1.2,color:'#7ed321'}},
+        {type:'line',name:'J',data:J,...indCfg,lineStyle:{width:1.2,color:'#bd10e0'}},
+      ];
+    } else if(activeInd==='rsi'){
+      const rsi=calcRSI(data,14),rsi6=calcRSI(data,6);
+      indSeries=[
+        {type:'line',name:'RSI14',data:rsi,...indCfg,lineStyle:{width:1.2,color:'#f5a623'}},
+        {type:'line',name:'RSI6',data:rsi6,...indCfg,lineStyle:{width:1.2,color:'#7ed321'}},
+        {type:'line',data:Array(rsi.length).fill(80),xAxisIndex:2,yAxisIndex:2,symbol:'none',lineStyle:{width:1,color:'rgba(232,55,74,.35)',type:'dashed'}},
+        {type:'line',data:Array(rsi.length).fill(20),xAxisIndex:2,yAxisIndex:2,symbol:'none',lineStyle:{width:1,color:'rgba(24,163,97,.35)',type:'dashed'}},
+      ];
+    }
+    indXAxis=[{type:'category',data:dates,gridIndex:2,axisLabel:{show:false},axisLine:{show:false},splitLine:{show:false},boundaryGap:false}];
+    indYAxis=[{type:'value',gridIndex:2,scale:true,axisLabel:{color:'#5a6a8a',fontSize:9},axisLine:{show:false},splitLine:{lineStyle:{color:'#1e2c48',type:'dashed'}}}];
+  }
+
+  const grids=hasInd?
+    [{left:64,right:16,top:8,bottom:'48%'},{left:64,right:16,top:'54%',height:'8%'},{left:64,right:16,top:'65%',bottom:28}]:
+    [{left:64,right:16,top:8,height:'56%'},{left:64,right:16,top:'70%',height:'16%',bottom:28}];
+  const dzIdx=hasInd?[0,1,2]:[0,1];
+
+  chart.setOption({
+    backgroundColor:'transparent',animation:false,legend:{show:false},
     tooltip:{trigger:'axis',axisPointer:{type:'cross'},backgroundColor:'rgba(13,21,38,.92)',
       borderColor:'rgba(255,255,255,.1)',textStyle:{color:'#e0e8f8',fontSize:11},
       formatter:params=>{
         const idx=params[0]?.dataIndex??0;
-        const c=params.find(p=>p.seriesType==='candlestick');
-        if(!c)return '';
+        const c=params.find(p=>p.seriesType==='candlestick');if(!c)return'';
         const [o,cl,l,h]=c.data;
         const prevClose=idx>0?data[idx-1].c:o;
         const chg=((cl-prevClose)/prevClose*100).toFixed(2);
         const clr=cl>=prevClose?'#e8374a':'#18a361';
         let html=`${c.axisValueLabel}<br>开 <b>${Number(o).toFixed(2)}</b> 收 <b style="color:${clr}">${Number(cl).toFixed(2)}</b>`
-               +`<br>高 <b style="color:#e8374a">${Number(h).toFixed(2)}</b> 低 <b style="color:#18a361">${Number(l).toFixed(2)}</b>`
-               +`<br>涨跌 <b style="color:${clr}">${Number(chg)>=0?'+':''}${chg}%</b>`;
-        params.filter(p=>p.seriesType==='line'&&p.seriesName.startsWith('MA')&&p.value!=null)
+                +`<br>高 <b style="color:#e8374a">${Number(h).toFixed(2)}</b> 低 <b style="color:#18a361">${Number(l).toFixed(2)}</b>`
+                +`<br>涨跌 <b style="color:${clr}">${Number(chg)>=0?'+':''}${chg}%</b>`;
+        params.filter(p=>p.seriesType==='line'&&/^MA/.test(p.seriesName)&&p.value!=null)
           .forEach(p=>{html+=`<br>${p.seriesName} <b style="color:${p.color}">${p.value}</b>`;});
         return html;
-      }
-    },
+      }},
     axisPointer:{link:[{xAxisIndex:'all'}]},
     dataZoom:[
-      {type:'inside',xAxisIndex:[0,1],start:initStart,end:100},
-      {type:'slider',xAxisIndex:[0,1],height:18,bottom:0,borderColor:'transparent',
+      {type:'inside',xAxisIndex:dzIdx,start:initStart,end:100},
+      {type:'slider',xAxisIndex:dzIdx,height:18,bottom:0,borderColor:'transparent',
        fillerColor:'rgba(61,126,252,.15)',handleStyle:{color:'#3d7efc'}}
     ],
-    grid:[{left:64,right:16,top:8,height:'56%'},{left:64,right:16,top:'70%',height:'16%',bottom:28}],
+    grid:grids,
     xAxis:[
-      {type:'category',data:dates,gridIndex:0,
+      {type:'category',data:dates,gridIndex:0,boundaryGap:true,
        axisLabel:{color:'#5a6a8a',fontSize:10,showMaxLabel:false},
        axisLine:{lineStyle:{color:'#2a3550'}},splitLine:{show:false}},
-      {type:'category',data:dates,gridIndex:1,
-       axisLabel:{show:false},axisLine:{lineStyle:{color:'#2a3550'}},splitLine:{show:false}}
+      {type:'category',data:dates,gridIndex:1,boundaryGap:true,
+       axisLabel:{show:false},axisLine:{show:false},splitLine:{show:false}},
+      ...indXAxis
     ],
     yAxis:[
       {type:'value',scale:true,gridIndex:0,
        axisLabel:{color:'#5a6a8a',fontSize:10,formatter:v=>v.toFixed(2)},
        splitLine:{lineStyle:{color:'#1e2c48',type:'dashed'}}},
-      {type:'value',gridIndex:1,axisLabel:{show:false},splitLine:{show:false}}
+      {type:'value',gridIndex:1,axisLabel:{show:false},splitLine:{show:false}},
+      ...indYAxis
     ],
     series:[
       {type:'candlestick',data:ohlc,xAxisIndex:0,yAxisIndex:0,
@@ -707,10 +803,11 @@ function _klineCandle(data, period){
       {type:'line',name:'MA5', data:calcMA(5), xAxisIndex:0,yAxisIndex:0,smooth:false,symbol:'none',connectNulls:false,lineStyle:{width:1,color:'#f5a623'}},
       {type:'line',name:'MA10',data:calcMA(10),xAxisIndex:0,yAxisIndex:0,smooth:false,symbol:'none',connectNulls:false,lineStyle:{width:1,color:'#7ed321'}},
       {type:'line',name:'MA20',data:calcMA(20),xAxisIndex:0,yAxisIndex:0,smooth:false,symbol:'none',connectNulls:false,lineStyle:{width:1,color:'#bd10e0'}},
-      {type:'bar',data:vols,xAxisIndex:1,yAxisIndex:1,barMaxWidth:8}
+      {type:'bar',data:vols,xAxisIndex:1,yAxisIndex:1,barMaxWidth:8},
+      ...indSeries
     ]
-  }, true);
-  _klineChart.resize();
+  },true);
+  chart.resize();
 }
 </script>
 {% block scripts %}{% endblock %}

@@ -242,7 +242,7 @@ _SINA_KLINE_URL = (
     "https://quotes.sina.cn/cn/api/jsonp_v2.php/var%20_x="
     "/CN_MarketDataService.getKLineData"
 )
-_KLINE_SCALE = {"intraday": (1, 300), "daily": (240, 250), "monthly": (240, 1500), "yearly": (240, 1800)}
+_KLINE_SCALE = {"intraday": (1, 300), "daily": (240, 250), "weekly": (240, 1000), "monthly": (240, 1500), "yearly": (240, 1800)}
 
 
 def fetch_stock_kline(code: str, period: str) -> dict:
@@ -279,7 +279,7 @@ def fetch_stock_kline(code: str, period: str) -> dict:
         prev_close = round(float(prev_items[-1]["close"]), 2) if prev_items else None
         return {"type": "line", "data": filtered, "date": latest_date, "prev_close": prev_close}
 
-    if period in ("monthly", "yearly"):
+    if period in ("weekly", "monthly", "yearly"):
         import pandas as pd
         df = pd.DataFrame(items)
         df["day"] = pd.to_datetime(df["day"])
@@ -287,13 +287,18 @@ def fetch_stock_kline(code: str, period: str) -> dict:
             df[col] = pd.to_numeric(df[col], errors="coerce")
         df["volume"] = pd.to_numeric(df.get("volume", pd.Series([0] * len(df))), errors="coerce").fillna(0)
         df = df.set_index("day")
-        freq = "ME" if period == "monthly" else "YE"
+        if period == "weekly":
+            freq_primary, freq_fallback, fmt = "W-FRI", "W", "%Y-%m-%d"
+        elif period == "monthly":
+            freq_primary, freq_fallback, fmt = "ME", "M", "%Y-%m"
+        else:
+            freq_primary, freq_fallback, fmt = "YE", "Y", "%Y"
+        freq = freq_primary
         try:
             agg = df.resample(freq).agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}).dropna()
         except ValueError:
-            freq = "M" if period == "monthly" else "Y"
+            freq = freq_fallback
             agg = df.resample(freq).agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}).dropna()
-        fmt = "%Y-%m" if period == "monthly" else "%Y"
         return {
             "type": "kline",
             "data": [{"d": dt.strftime(fmt), "o": round(float(row["open"]), 2),

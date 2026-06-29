@@ -50,6 +50,14 @@
   }
   .cost-row input:focus { border-color:var(--accent);background:var(--input-focus); }
 
+  /* 持仓概览 */
+  .pf-stat { display:flex;flex-direction:column;gap:3px;padding-right:24px;border-right:1px solid var(--border);margin-right:24px; }
+  .pf-stat:last-of-type { border-right:none;margin-right:0;padding-right:0; }
+  .pf-label { font-size:.68rem;color:var(--text3);letter-spacing:.3px; }
+  .pf-val { font-size:1.05rem;font-weight:800;font-variant-numeric:tabular-nums; }
+  .pf-sub { font-size:.72rem;font-variant-numeric:tabular-nums; }
+  .alloc-seg { transition:flex .3s;cursor:default; }
+
   /* 搜索结果 */
   .result-panel { border-radius:10px;border:1px solid var(--border);overflow:hidden; }
   .result-header { background:linear-gradient(90deg,var(--dark3),var(--dark2));padding:12px 16px;
@@ -101,6 +109,33 @@
       <div class="sc-value num" id="stat-pnl">--</div>
       <div class="sc-sub" id="stat-pnl-sub">已设成本股</div>
     </div>
+  </div>
+</div>
+
+<!-- 持仓概览（有股数时显示） -->
+<div class="panel mb-3" id="portfolio-panel" style="display:none">
+  <div class="panel-hd">
+    <div class="hd-title"><div class="accent-bar"></div>持仓概览</div>
+    <span id="pf-hint" style="font-size:.72rem;color:var(--text3)"></span>
+  </div>
+  <div class="panel-body" style="padding:12px 16px">
+    <div class="d-flex flex-wrap mb-3">
+      <div class="pf-stat">
+        <div class="pf-label">持仓市值</div>
+        <div class="pf-val num" id="pf-mktval">--</div>
+      </div>
+      <div class="pf-stat">
+        <div class="pf-label">今日盈亏</div>
+        <div id="pf-today"><span class="pf-val num">--</span></div>
+      </div>
+      <div class="pf-stat">
+        <div class="pf-label">总盈亏</div>
+        <div id="pf-total"><span class="pf-val num">--</span></div>
+      </div>
+    </div>
+    <div class="pf-label mb-1">仓位分布</div>
+    <div id="pf-alloc-bar" style="display:flex;height:20px;border-radius:5px;overflow:hidden;gap:1px;margin-bottom:6px"></div>
+    <div id="pf-alloc-labels" class="d-flex flex-wrap gap-3"></div>
   </div>
 </div>
 
@@ -374,7 +409,7 @@ function stockRow(d){
 
   return `<tr class="${rowCls}">
     <td class="num" style="font-size:.78rem;color:var(--text3)">${d.code||'-'}</td>
-    <td><span class="fw-bold" style="font-size:.9rem">${d.name||d.code}</span></td>
+    <td><a href="/stock/${d.code}" class="fw-bold text-decoration-none" style="font-size:.9rem;color:var(--text1)">${d.name||d.code}</a></td>
     <td class="text-end num fw-bold ${cls}" style="font-size:1rem">${d.price!=null?Number(d.price).toFixed(2):'-'}</td>
     <td class="text-end"><span class="chg-badge ${cls}">${fmtPct(d.change_pct)}</span></td>
     <td class="text-end num ${cls}" style="font-size:.82rem">${chgAbs!=null?(chgAbs>=0?'+':'')+chgAbs.toFixed(2):'-'}</td>
@@ -462,12 +497,77 @@ function updateStats(data){
   }
 }
 
+function fmtLargeNum(v,showSign=true){
+  if(v==null)return'--';
+  const a=Math.abs(v),s=v<0?'-':showSign?'+':'';
+  if(a>=1e8)return s+(a/1e8).toFixed(2)+'亿';
+  if(a>=1e4)return s+(a/1e4).toFixed(0)+'万';
+  return (v>=0?(showSign?'+':''):'-')+a.toFixed(0);
+}
+
+function updatePortfolioPanel(data){
+  const ws=data.filter(d=>d.shares!=null&&d.shares>0&&d.price!=null);
+  const panel=document.getElementById('portfolio-panel');
+  if(!ws.length){panel.style.display='none';return;}
+  panel.style.display='';
+  document.getElementById('pf-hint').textContent=ws.length+'只有持仓量';
+
+  const totalMv=ws.reduce((s,d)=>s+d.price*d.shares,0);
+  // 今日
+  const wp=ws.filter(d=>d.prev_close!=null);
+  const todayPnl=wp.reduce((s,d)=>s+(d.price-d.prev_close)*d.shares,0);
+  const prevMv=wp.reduce((s,d)=>s+d.prev_close*d.shares,0);
+  const todayPct=prevMv>0?todayPnl/prevMv*100:0;
+  // 总盈亏
+  const wc=ws.filter(d=>d.cost_price!=null);
+  const totalPnl=wc.reduce((s,d)=>s+(d.price-d.cost_price)*d.shares,0);
+  const costMv=wc.reduce((s,d)=>s+d.cost_price*d.shares,0);
+  const totalPct=costMv>0?totalPnl/costMv*100:null;
+
+  document.getElementById('pf-mktval').textContent=
+    totalMv>=1e8?(totalMv/1e8).toFixed(2)+'亿':totalMv>=1e4?(totalMv/1e4).toFixed(0)+'万':totalMv.toFixed(0);
+
+  const tc=todayPnl>=0?'up':'down';
+  document.getElementById('pf-today').innerHTML=
+    `<span class="pf-val num ${tc}">${fmtLargeNum(todayPnl)}</span>`
+   +`<span class="pf-sub ${tc}" style="margin-left:5px">(${todayPct>=0?'+':''}${todayPct.toFixed(2)}%)</span>`;
+
+  if(totalPct!=null){
+    const gc=totalPnl>=0?'up':'down';
+    document.getElementById('pf-total').innerHTML=
+      `<span class="pf-val num ${gc}">${fmtLargeNum(totalPnl)}</span>`
+     +`<span class="pf-sub ${gc}" style="margin-left:5px">(${totalPct>=0?'+':''}${totalPct.toFixed(2)}%)</span>`;
+  } else {
+    document.getElementById('pf-total').innerHTML='<span style="font-size:.8rem;color:var(--text3)">设成本后显示</span>';
+  }
+
+  // 仓位分布
+  const sorted=[...ws].sort((a,b)=>b.price*b.shares-a.price*a.shares);
+  document.getElementById('pf-alloc-bar').innerHTML=sorted.map(d=>{
+    const pct=totalMv>0?d.price*d.shares/totalMv*100:0;
+    const a=Math.abs(d.change_pct||0);
+    const bg=d.change_pct>0?`rgba(232,55,74,${Math.min(.25+a/20,.85)})`
+            :d.change_pct<0?`rgba(24,163,97,${Math.min(.25+a/20,.85)})`:'rgba(100,120,160,.4)';
+    return `<div class="alloc-seg" style="flex:${pct};background:${bg}" title="${d.name||d.code} ${pct.toFixed(1)}%"></div>`;
+  }).join('');
+  document.getElementById('pf-alloc-labels').innerHTML=sorted.map(d=>{
+    const pct=totalMv>0?d.price*d.shares/totalMv*100:0;
+    const cls=pctClass(d.change_pct);
+    const dot=d.change_pct>0?'#e8374a':d.change_pct<0?'#18a361':'#8a94aa';
+    return `<div style="display:flex;align-items:center;gap:4px">
+      <div style="width:7px;height:7px;border-radius:2px;background:${dot};flex-shrink:0"></div>
+      <span style="font-size:.72rem;color:var(--text2)">${d.name||d.code}</span>
+      <span class="${cls} num" style="font-size:.7rem;font-weight:700">${pct.toFixed(1)}%</span>
+    </div>`;
+  }).join('');
+}
+
 function loadStocks(){
   fetch('/api/stocks/watchlist').then(r=>r.json()).then(data=>{
     allData=data.filter(d=>!d.error);
     watchlistCodes=new Set(allData.map(d=>d.code));
     maxAmount=Math.max(...allData.map(d=>d.amount||0),1);
-    updateStats(allData);renderTable();
+    updateStats(allData);updatePortfolioPanel(allData);renderTable();
     document.getElementById('refresh-hint').textContent=`更新于 ${now()}`;
     loadFundamentals();
   }).catch(()=>{

@@ -54,6 +54,13 @@ def page_board_detail(request: Request, board_type: str, board_name: str):
     )
 
 
+@app.get("/stock/{code}")
+def page_stock_detail(request: Request, code: str):
+    return templates.TemplateResponse(
+        request=request, name="stock_detail.html", context={"code": code}
+    )
+
+
 @app.get("/stocks")
 def page_stocks(request: Request):
     return templates.TemplateResponse(request=request, name="stocks.html")

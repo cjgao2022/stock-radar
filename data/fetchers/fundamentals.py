@@ -24,6 +24,27 @@ def _parse_num(s) -> float | None:
         return None
 
 
+def fetch_stock_financials_history(code: str) -> dict:
+    """返回近8期财务指标趋势（按报告期），用于个股详情页图表。
+    字段：periods/eps/roe/profit_yoy/rev_yoy
+    """
+    try:
+        with _AK_LOCK:
+            df = ak.stock_financial_abstract_ths(symbol=code, indicator='按报告期')
+        if df is None or df.empty:
+            return {"error": "no data"}
+        recent = df.tail(8)
+        return {
+            "periods": [str(p) for p in recent['报告期'].tolist()],
+            "eps":        [_parse_num(v) for v in recent['基本每股收益']],
+            "roe":        [_parse_pct(v) for v in recent['净资产收益率']],
+            "profit_yoy": [_parse_pct(v) for v in recent['净利润同比增长率']],
+            "rev_yoy":    [_parse_pct(v) for v in recent['营业总收入同比增长率']],
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
 def fetch_stock_fundamental(code: str) -> dict:
     """
     返回单只股票的基本面快照：
