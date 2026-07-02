@@ -163,6 +163,31 @@
     /* ── 主布局 ── */
     .main-wrap { padding: var(--sp-6) var(--sp-4) var(--sp-8); }
 
+    /* ── 页面头（统一定位区） ── */
+    .page-head {
+      display: flex; align-items: flex-end; justify-content: space-between;
+      gap: var(--sp-4); flex-wrap: wrap;
+      margin-bottom: var(--sp-6); padding-bottom: var(--sp-4);
+      border-bottom: 1px solid var(--border);
+    }
+    .page-head .ph-title {
+      margin: 0; font-size: var(--fs-h1); font-weight: 800; letter-spacing: .5px;
+      color: var(--text1); line-height: 1.2;
+      display: flex; align-items: center; gap: var(--sp-2);
+    }
+    .page-head .ph-title .ph-bar {
+      width: 4px; height: 22px; border-radius: 2px;
+      background: linear-gradient(180deg, var(--accent) 0%, #7ab3f8 100%);
+    }
+    .page-head .ph-sub {
+      margin: var(--sp-1) 0 0 calc(4px + var(--sp-2));
+      font-size: var(--fs-sm); color: var(--text3);
+    }
+    .page-head .ph-sub:empty { display: none; }
+    .page-head .ph-meta {
+      font-size: var(--fs-xs); color: var(--text3); font-variant-numeric: tabular-nums;
+    }
+
     /* ── 通用卡片 ── */
     .panel {
       background: var(--card-bg);
@@ -472,6 +497,15 @@
 </div>
 
 <div class="main-wrap">
+  {% block page_head %}
+  <div class="page-head">
+    <div>
+      <h1 class="ph-title"><span class="ph-bar"></span>{% block page_title %}{% endblock %}</h1>
+      <div class="ph-sub">{% block page_subtitle %}{% endblock %}</div>
+    </div>
+    <div class="ph-meta">{% block page_meta %}{% endblock %}</div>
+  </div>
+  {% endblock %}
   {% block content %}{% endblock %}
 </div>
 
