@@ -4,7 +4,7 @@
 
 本地运行，FastAPI + Jinja2，数据源：新浪行情 + AKShare（THS/东方财富）。
 
-最近验证：2026-07-02（Python 3.14 venv 搭建 + 依赖安装 + 服务启动验证通过；akshare 1.18.64 / fastapi 0.139.0 import 通过，首页 HTTP 200；CDN 本地化修复白屏）
+最近验证：2026-07-02（视觉系统刷新 + 全站页面头 + 导航分组；内容增强4阶段：龙虎榜原因/利润增速/融资买入、口径修正、个股估值分位(百度)+市场股息率、涨停行业分布+赚钱效应；9 页全部 HTTP 200）
 
 ---
 
@@ -100,6 +100,20 @@
 - [x] 所有时间展示强制使用北京时间（`timeZone:'Asia/Shanghai'`）
 - [x] 深色主题 `<select>` option 可见性修复：`color-scheme:dark` + `option { background:#111827; color:#e0e8f0 }`
 
+### 视觉系统刷新 + 信息架构（2026-07-02）
+- [x] **中英字体栈**：`PingFang SC + SF Pro` 系统字体（零 CDN 依赖）、抗锯齿、行高/字距
+- [x] **设计 token 全站接入**：四级字号 `--fs-*`、8 倍数间距 `--sp-*`、统一圆角 `--radius`
+- [x] **全站统一页面头**：`page_title/page_subtitle/page_meta` 块，8 页各设标题+用途副标题
+- [x] **导航按逻辑分组重排**：大盘 ｜ 宏观·估值 ｜ 板块·龙头 ｜ 个股·ETF·资讯，组间分隔符
+- [x] **首页面板主次分层**：市场情绪/热力图深色主锚点 + `.panel-hd.subtle` 次级头
+- [x] **CDN 本地化**：echarts/bootstrap 下载到 `static/vendor/`，修复系统代理拦截白屏
+
+### 内容增强（投资者视角，2026-07-02）
+- [x] **阶段1 零成本快赢**：龙虎榜「上榜原因」、个股主表「利润增速」(profit_yoy)、宏观「5日日均融资买入」
+- [x] **阶段2 口径修正**：估值页副标题去「分位」承诺、PE 列标注「静」
+- [x] **阶段3 估值深化**：新增 `valuation_stock.py`（百度股市通个股 PE(TTM)/PB 近1年分位，非 push2）+ `/api/stocks/{code}/valuation`，stock_detail 展示分位分档；`market_state` 并入全A股息率+近5年分位，macro 估值温度加 KPI
+- [x] **阶段4 主线与赚钱效应**：涨停按行业聚合（主线代理，题材源不可得）、涨跌停比、连板晋级率
+
 ---
 
 ## 已移除功能
@@ -135,3 +149,6 @@
 | 持仓股解禁预警 | AKShare `stock_restricted_release_queue_em/sina` 数据截止 2020 年，无未来解禁日历数据 |
 | 高管/大股东增减持 | `stock_hold_num_cninfo` 接口参数已变更，`stock_zh_a_alerts_cls` 函数不存在，暂无可用接口 |
 | 定增/配股事件 | AKShare 无稳定接口 |
+| 涨停「题材」归类 | `stock_zt_pool_em` 仅有「所属行业」无题材字段，AKShare 无可靠涨停原因源；已改用「涨停按行业聚合」作主线代理 |
+| 行业级 PE 历史分位 / PB / 股息率 | 巨潮 `stock_industry_pe_ratio_cninfo` 仅当期 PE、无 PB/股息，历史分位需跨日期反复调用成本高；个股级已用百度股市通实现 |
+| ETF 跟踪指数估值分位 | `stock_zh_index_value_csindex` 仅返回约20行不足算分位；仅宽基 ETF 可经乐咕乐股指数PE近似，后置 |
