@@ -118,6 +118,9 @@
           <span style="font-size:.72rem;color:var(--text2)">20日变化
             <b id="margin-20d" style="font-size:.9rem">--</b> 亿
           </span>
+          <span style="font-size:.72rem;color:var(--text2)" title="近5日融资买入额日均，反映杠杆资金活跃度">5日日均买入
+            <b id="margin-buy5" style="font-size:.9rem;color:var(--text1)">--</b> 亿
+          </span>
         </div>
       </div>
       <div class="panel-body" style="padding:8px 12px 10px">
@@ -404,6 +407,11 @@ function renderMargin(d) {
   el5.style.color = d.chg_5d > 0 ? '#e8374a' : d.chg_5d < 0 ? '#18a361' : '';
   document.getElementById('margin-20d').textContent = fmt(d.chg_20d);
   document.getElementById('margin-20d').style.color = d.chg_20d > 0 ? '#e8374a' : d.chg_20d < 0 ? '#18a361' : '';
+
+  // 近5日日均融资买入额（history[].buy，反映杠杆资金活跃度）
+  const buy5arr = (d.history || []).map(x => x.buy).filter(v => v != null).slice(-5);
+  const buy5el = document.getElementById('margin-buy5');
+  buy5el.textContent = buy5arr.length ? (buy5arr.reduce((a, b) => a + b, 0) / buy5arr.length).toFixed(0) : '--';
 
   if (!d.history || !d.history.length) return;
   const chart = echarts.init(document.getElementById('margin-chart'));

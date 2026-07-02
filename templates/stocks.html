@@ -169,12 +169,13 @@
           <th class="text-end sortable" onclick="sortBy('pe')" title="静态市盈率=最新价÷年报EPS">PE</th>
           <th class="text-end sortable" onclick="sortBy('pb')" title="市净率=最新价÷最新每股净资产">PB</th>
           <th class="text-end sortable" onclick="sortBy('roe')" title="最新季报净资产收益率">ROE</th>
+          <th class="text-end sortable" onclick="sortBy('profit_yoy')" title="最新季报净利润同比增速">利润增速</th>
           <th class="text-end sortable" onclick="sortBy('pnl_pct')" title="持仓盈亏（需设成本价）">持仓盈亏</th>
           <th style="width:72px"></th>
         </tr>
       </thead>
       <tbody id="stock-tbody">
-        <tr><td colspan="13" class="text-center text-muted py-4">加载中...</td></tr>
+        <tr><td colspan="14" class="text-center text-muted py-4">加载中...</td></tr>
       </tbody>
     </table>
   </div>
@@ -408,6 +409,9 @@ function stockRow(d){
   const peHtml=peVal!=null?`<span class="num" style="font-size:.8rem;color:${peColor}">${peVal.toFixed(1)}x</span>`:`<span style="color:var(--text3);font-size:.72rem">--</span>`;
   const pbHtml=pbVal!=null?`<span class="num" style="font-size:.8rem;color:${pbColor}">${pbVal.toFixed(2)}x</span>`:`<span style="color:var(--text3);font-size:.72rem">--</span>`;
   const roeHtml=roeVal!=null?`<span class="num" style="font-size:.8rem;color:${roeColor}">${roeVal.toFixed(1)}%</span>`:`<span style="color:var(--text3);font-size:.72rem">--</span>`;
+  const pyVal=f.profit_yoy??null;
+  const pyColor=pyVal!=null?(pyVal<0?'var(--up)':pyVal>=30?'var(--down)':'var(--text1)'):'var(--text3)';
+  const pyHtml=pyVal!=null?`<span class="num" style="font-size:.8rem;color:${pyColor}">${(pyVal>=0?'+':'')+pyVal.toFixed(1)}%</span>`:`<span style="color:var(--text3);font-size:.72rem">--</span>`;
 
   return `<tr class="${rowCls}">
     <td class="num" style="font-size:.78rem;color:var(--text3)">${d.code||'-'}</td>
@@ -427,6 +431,7 @@ function stockRow(d){
     <td class="text-end">${peHtml}</td>
     <td class="text-end">${pbHtml}</td>
     <td class="text-end">${roeHtml}</td>
+    <td class="text-end">${pyHtml}</td>
     <td class="text-end">${pnlHtml}</td>
     <td class="text-center" style="white-space:nowrap">
       <button class="btn-kline" onclick="openKlineModal('${d.code}','${escQ(d.name||d.code)}',false)" title="K线">K线</button>
@@ -448,6 +453,7 @@ function getSortVal(d,key){
   if(key==='pe'){const f=fundData[d.code];return(f?.eps&&d.price)?d.price/f.eps:Infinity;}
   if(key==='pb'){const f=fundData[d.code];return(f?.bvps&&d.price)?d.price/f.bvps:Infinity;}
   if(key==='roe')return fundData[d.code]?.roe??-Infinity;
+  if(key==='profit_yoy')return fundData[d.code]?.profit_yoy??-Infinity;
   return d[key]??-Infinity;
 }
 function filterRows(){ renderTable(); }
@@ -457,7 +463,7 @@ function renderTable(){
   rows.sort((a,b)=>{const av=getSortVal(a,sortState.key),bv=getSortVal(b,sortState.key);return sortState.desc?bv-av:av-bv;});
   document.getElementById('stock-tbody').innerHTML=rows.length
     ?rows.map(stockRow).join('')
-    :'<tr><td colspan="13" class="text-center text-muted py-3">无匹配数据</td></tr>';
+    :'<tr><td colspan="14" class="text-center text-muted py-3">无匹配数据</td></tr>';
 }
 
 function updateStats(data){
@@ -573,7 +579,7 @@ function loadStocks(){
     document.getElementById('refresh-hint').textContent=`更新于 ${now()}`;
     loadFundamentals();
   }).catch(()=>{
-    document.getElementById('stock-tbody').innerHTML='<tr><td colspan="13" class="text-center text-danger py-3">加载失败，请刷新</td></tr>';
+    document.getElementById('stock-tbody').innerHTML='<tr><td colspan="14" class="text-center text-danger py-3">加载失败，请刷新</td></tr>';
   });
 }
 loadStocks();

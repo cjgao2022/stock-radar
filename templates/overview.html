@@ -564,9 +564,11 @@ function renderLhbRows(rows){
     const nbCls=nb>=0?'net-buy-pos':'net-buy-neg';
     const mktCap=d.free_mkt_cap!=null?(d.free_mkt_cap/1e8).toFixed(0)+'亿':'-';
     const turnover=d.turnover!=null?Number(d.turnover).toFixed(2)+'%':'-';
+    const reason=(d.reason||'').replace(/"/g,'');
+    const reasonHtml=reason?`<div class="lhb-reason" title="${reason}">${reason}</div>`:'';
     return `<tr>
       <td style="font-size:.8rem;color:var(--text2)">${d.code||'-'}</td>
-      <td class="fw-semibold" style="font-size:.84rem">${d.name||'-'}</td>
+      <td class="fw-semibold" style="font-size:.84rem">${d.name||'-'}${reasonHtml}</td>
       <td class="text-end"><span class="chg-badge ${cls}">${fmtPct(d.change_pct)}</span></td>
       <td class="text-end num ${nbCls}">${fmtM(nb)}</td>
       <td class="text-end" style="font-size:.8rem;color:var(--text2)">${turnover}</td>
