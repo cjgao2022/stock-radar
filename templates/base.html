@@ -37,6 +37,21 @@
       --td-border:   #f0f3f9;
       --input-bg:    #f5f7fc;
       --input-focus: #ffffff;
+
+      /* ── 字体：中英系统字体栈（PingFang SC + SF Pro，零网络依赖） ── */
+      --font-sans: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'HarmonyOS Sans SC',
+                   'Segoe UI', 'Microsoft YaHei', 'Noto Sans SC', Roboto, Helvetica, Arial, sans-serif;
+      /* ── 四级字号梯度 ── */
+      --fs-h1:   1.5rem;   /* 大标题 ~24px */
+      --fs-h2:   1.05rem;  /* 中标题 ~17px */
+      --fs-body: .9rem;    /* 正文   ~14px */
+      --fs-sm:   .8rem;    /* 注释   ~13px */
+      --fs-xs:   .72rem;   /* 微注   ~11px */
+      /* ── 8 倍数间距体系 ── */
+      --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+      --sp-6: 24px; --sp-8: 32px; --sp-12: 48px;
+      /* ── 统一圆角 ── */
+      --radius: 12px; --radius-sm: 8px;
     }
 
     /* ══ 深色主题 ══ */
@@ -69,7 +84,12 @@
     body {
       background: var(--bg);
       color: var(--text1);
-      font-size: .9rem;
+      font-family: var(--font-sans);
+      font-size: var(--fs-body);
+      line-height: 1.6;
+      letter-spacing: .01em;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
       transition: background .3s, color .3s;
     }
     [data-theme="dark"] body,
@@ -97,7 +117,7 @@
       box-shadow: 0 2px 16px rgba(0,0,0,.25);
     }
     .topnav .brand {
-      font-size: 1.1rem; font-weight: 800; letter-spacing: 1.5px;
+      font-size: var(--fs-h2); font-weight: 800; letter-spacing: 1.5px;
       color: #ffffff; text-decoration: none;
       display: flex; align-items: center; gap: 8px;
     }
@@ -111,7 +131,7 @@
     .topnav .nav-links { display: flex; gap: 4px; }
     .topnav .nav-links a {
       color: rgba(255,255,255,.6); text-decoration: none;
-      font-size: .85rem; font-weight: 500;
+      font-size: var(--fs-sm); font-weight: 500;
       padding: 6px 14px; border-radius: 6px;
       transition: all .18s; letter-spacing: .3px;
     }
@@ -121,7 +141,7 @@
     /* 导航栏右侧 */
     .topnav .market-status {
       display: flex; align-items: center; gap: 10px;
-      font-size: .72rem; color: rgba(255,255,255,.45); letter-spacing: .3px;
+      font-size: var(--fs-xs); color: rgba(255,255,255,.45); letter-spacing: .3px;
     }
     .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #3be08b; animation: blink 2s infinite; }
     @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.25} }
@@ -141,12 +161,12 @@
 
 
     /* ── 主布局 ── */
-    .main-wrap { padding: 16px 16px 32px; }
+    .main-wrap { padding: var(--sp-6) var(--sp-4) var(--sp-8); }
 
     /* ── 通用卡片 ── */
     .panel {
       background: var(--card-bg);
-      border-radius: 10px;
+      border-radius: var(--radius);
       border: 1px solid var(--border);
       box-shadow: var(--shadow-sm);
       overflow: hidden;
@@ -155,7 +175,7 @@
     .panel-hd {
       background: linear-gradient(90deg, var(--dark1) 0%, var(--dark3) 100%);
       color: rgba(255,255,255,.85);
-      padding: 10px 16px; font-size: .8rem; font-weight: 600; letter-spacing: .6px;
+      padding: var(--sp-3) var(--sp-4); font-size: var(--fs-sm); font-weight: 600; letter-spacing: .6px;
       display: flex; align-items: center; justify-content: space-between;
     }
     .panel-hd .hd-title { display: flex; align-items: center; gap: 8px; }
@@ -164,18 +184,18 @@
       background: linear-gradient(180deg, var(--accent) 0%, #7ab3f8 100%);
       border-radius: 2px;
     }
-    .panel-body       { padding: 14px 16px; }
+    .panel-body       { padding: var(--sp-4); }
     .panel-body-flush { padding: 0; }
 
     /* ── 深色统计卡 ── */
     .stat-card {
       background: linear-gradient(135deg, var(--dark1) 0%, var(--dark3) 100%);
       border: 1px solid rgba(255,255,255,.07);
-      border-radius: 10px; padding: 14px 16px; color: #e0e8f8;
+      border-radius: var(--radius-sm); padding: var(--sp-4); color: #e0e8f8;
     }
-    .stat-card .sc-label { font-size: .7rem; color: rgba(255,255,255,.4); letter-spacing: .8px; text-transform: uppercase; margin-bottom: 4px; }
-    .stat-card .sc-value { font-size: 1.55rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.15; }
-    .stat-card .sc-sub   { font-size: .72rem; color: rgba(255,255,255,.35); margin-top: 3px; }
+    .stat-card .sc-label { font-size: var(--fs-xs); color: rgba(255,255,255,.4); letter-spacing: .8px; text-transform: uppercase; margin-bottom: 4px; }
+    .stat-card .sc-value { font-size: var(--fs-h1); font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.15; }
+    .stat-card .sc-sub   { font-size: var(--fs-xs); color: rgba(255,255,255,.35); margin-top: 3px; }
     .stat-card .sc-value.up   { color: var(--up); }
     .stat-card .sc-value.down { color: var(--down); }
 
@@ -183,7 +203,7 @@
     .idx-card {
       background: linear-gradient(135deg, var(--dark1) 0%, var(--dark3) 100%);
       border: 1px solid rgba(255,255,255,.06);
-      border-radius: 10px; padding: 12px 14px; color: #e0e8f8;
+      border-radius: var(--radius-sm); padding: var(--sp-3); color: #e0e8f8;
       position: relative; overflow: hidden; transition: border-color .2s;
     }
     .idx-card::before {
@@ -193,9 +213,9 @@
     .idx-card.down::before { background: var(--down); }
     .idx-card.flat::before { background: rgba(255,255,255,.15); }
     .idx-card:hover        { border-color: rgba(255,255,255,.14); }
-    .idx-card .idx-name  { font-size: .7rem; color: rgba(255,255,255,.4); letter-spacing: .4px; }
-    .idx-card .idx-price { font-size: 1.4rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.2; color: rgba(255,255,255,.92); }
-    .idx-card .idx-chg   { font-size: .8rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .idx-card .idx-name  { font-size: var(--fs-xs); color: rgba(255,255,255,.4); letter-spacing: .4px; }
+    .idx-card .idx-price { font-size: var(--fs-h1); font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.2; color: rgba(255,255,255,.92); }
+    .idx-card .idx-chg   { font-size: var(--fs-sm); font-weight: 700; font-variant-numeric: tabular-nums; }
     .idx-card .up   { color: #f08090 !important; }
     .idx-card .down { color: #56c98e !important; }
     .idx-card .flat { color: rgba(255,255,255,.4) !important; }
@@ -209,7 +229,7 @@
     .chg-badge {
       display: inline-block; min-width: 68px; text-align: center;
       padding: 2px 6px; border-radius: 5px;
-      font-size: .78rem; font-weight: 700; font-variant-numeric: tabular-nums;
+      font-size: var(--fs-sm); font-weight: 700; font-variant-numeric: tabular-nums;
     }
     .chg-badge.up   { background: var(--up-bg);   color: var(--up);   border: 1px solid var(--up-border); }
     .chg-badge.down { background: var(--down-bg); color: var(--down); border: 1px solid var(--down-border); }
@@ -219,17 +239,17 @@
     .num { font-variant-numeric: tabular-nums; font-family: var(--num); }
 
     /* ── 表格 ── */
-    .data-table { font-size: .84rem; width: 100%; }
+    .data-table { font-size: var(--fs-sm); width: 100%; }
     .data-table thead th {
       background: var(--thead-bg);
       color: var(--text2);
-      font-weight: 600; font-size: .74rem; letter-spacing: .4px;
+      font-weight: 600; font-size: var(--fs-xs); letter-spacing: .4px;
       border-bottom: 2px solid var(--border);
-      padding: 8px 12px; white-space: nowrap;
+      padding: var(--sp-2) var(--sp-3); white-space: nowrap;
       transition: background .3s, color .3s;
     }
     .data-table tbody td {
-      padding: 8px 12px;
+      padding: var(--sp-2) var(--sp-3);
       border-color: var(--td-border);
       vertical-align: middle;
       color: var(--text1);
@@ -257,7 +277,7 @@
     .search-wrap .form-control {
       background: var(--input-bg); border: 1px solid var(--border);
       color: var(--text1);
-      padding-left: 2.2rem; border-radius: 7px; font-size: .875rem;
+      padding-left: 2.2rem; border-radius: var(--radius-sm); font-size: var(--fs-body);
       transition: background .3s, border-color .2s;
     }
     .search-wrap .form-control:focus {
@@ -324,18 +344,18 @@
     #code-confirm-overlay.show { display: flex; }
     .cc-box {
       background: var(--card-bg); border: 1px solid var(--border2);
-      border-radius: 14px; padding: 28px 28px 22px;
+      border-radius: var(--radius); padding: 28px 28px 22px;
       width: 320px; box-shadow: var(--shadow-md);
       animation: cc-in .15s ease;
     }
     @keyframes cc-in { from { transform: scale(.93); opacity:0 } to { transform: scale(1); opacity:1 } }
-    .cc-title { font-size: .95rem; font-weight: 700; color: var(--text1); margin-bottom: 6px; }
-    .cc-desc  { font-size: .8rem; color: var(--text2); margin-bottom: 16px; line-height: 1.55; }
+    .cc-title { font-size: var(--fs-h2); font-weight: 700; color: var(--text1); margin-bottom: 6px; }
+    .cc-desc  { font-size: var(--fs-sm); color: var(--text2); margin-bottom: 16px; line-height: 1.55; }
     .cc-desc strong { color: var(--accent); font-family: var(--num); letter-spacing: .5px; }
     #cc-input {
-      width: 100%; padding: 8px 12px; border-radius: 8px;
+      width: 100%; padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-sm);
       border: 1.5px solid var(--border2); background: var(--input-bg);
-      color: var(--text1); font-size: .95rem; font-family: var(--num);
+      color: var(--text1); font-size: var(--fs-body); font-family: var(--num);
       letter-spacing: 1px; outline: none; transition: border-color .15s;
     }
     #cc-input:focus { border-color: var(--accent); background: var(--input-focus); }
@@ -345,35 +365,35 @@
       25%    { transform:translateX(-6px) }
       75%    { transform:translateX(6px) }
     }
-    #cc-err { font-size: .75rem; color: var(--up); min-height: 18px; margin-top: 5px; }
+    #cc-err { font-size: var(--fs-xs); color: var(--up); min-height: 18px; margin-top: 5px; }
     .cc-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
     .cc-btn-cancel {
-      padding: 6px 16px; border-radius: 7px; font-size: .82rem;
+      padding: 6px 16px; border-radius: var(--radius-sm); font-size: var(--fs-sm);
       border: 1px solid var(--border2); background: transparent;
       color: var(--text2); cursor: pointer; transition: all .15s;
     }
     .cc-btn-cancel:hover { background: var(--flat-bg); color: var(--text1); }
     .cc-btn-ok {
-      padding: 6px 18px; border-radius: 7px; font-size: .82rem;
+      padding: 6px 18px; border-radius: var(--radius-sm); font-size: var(--fs-sm);
       border: none; background: var(--accent); color: #fff;
       cursor: pointer; font-weight: 600; transition: opacity .15s;
     }
     .cc-btn-ok:hover { opacity: .85; }
 
     /* ── 周期按钮（K线页面通用） ── */
-    .days-btn { padding:2px 10px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:.75rem;cursor:pointer;transition:all .15s; }
+    .days-btn { padding:2px 10px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:var(--fs-xs);cursor:pointer;transition:all .15s; }
     .days-btn.active { background:var(--accent);border-color:var(--accent);color:#fff; }
     .days-btn:hover:not(.active) { border-color:var(--accent);color:var(--accent); }
 
     /* ── K线按钮（持仓行内） ── */
-    .btn-kline { border:none;background:transparent;color:var(--accent);font-size:.68rem;font-weight:700;
+    .btn-kline { border:none;background:transparent;color:var(--accent);font-size:var(--fs-xs);font-weight:700;
       padding:2px 5px;border-radius:4px;cursor:pointer;transition:all .15s;margin-right:3px;letter-spacing:.3px; }
     .btn-kline:hover { background:rgba(61,126,252,.15); }
 
     /* ── K线弹框 ── */
-    .kline-mc { background:var(--card-bg);border:1px solid var(--border);border-radius:12px; }
-    .kline-mh { display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border); }
-    .kline-close { background:none;border:none;color:var(--text3);font-size:1.1rem;cursor:pointer;padding:2px 6px;border-radius:4px;transition:all .15s;margin-left:auto;line-height:1; }
+    .kline-mc { background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius); }
+    .kline-mh { display:flex;align-items:center;gap:10px;padding:var(--sp-3) var(--sp-4);border-bottom:1px solid var(--border); }
+    .kline-close { background:none;border:none;color:var(--text3);font-size:var(--fs-h2);cursor:pointer;padding:2px 6px;border-radius:4px;transition:all .15s;margin-left:auto;line-height:1; }
     .kline-close:hover { background:var(--flat-bg);color:var(--text1); }
   </style>
   {% block head %}{% endblock %}
