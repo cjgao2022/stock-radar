@@ -4,7 +4,7 @@
 
 本地运行，FastAPI + Jinja2，数据源：新浪行情 + AKShare（THS/东方财富）。
 
-最近验证：2026-06-24（板块月K/年K、ETF规模折溢价、板块成交额趋势图、市场估值温度、两融余额趋势）
+最近验证：2026-07-02（Python 3.14 venv 搭建 + 依赖安装 + 服务启动验证通过；akshare 1.18.64 / fastapi 0.139.0 import 通过，首页 HTTP 200；CDN 本地化修复白屏）
 
 ---
 
@@ -17,6 +17,13 @@
 - [x] 全局 `threading.Lock`（`_AK_LOCK`）序列化 AKShare 调用，解决 py_mini_racer 并发崩溃
 - [x] `get_cached` 不缓存 error 响应，避免错误结果污染内存缓存
 - [x] 板块路由跳过含 error 的 SQLite 日快照，回退到实时拉取
+
+### 环境与运维
+- [x] `.venv` 虚拟环境（Python 3.14）+ `requirements.txt` 依赖安装验证通过（akshare 1.18.64 / fastapi 0.139.0）
+- [x] `requirements.txt` 顶部显式声明 `setuptools`/`wheel`：修复 Python 3.12+ venv 默认不预装 setuptools 导致 akshare 传递依赖 `jsonpath`（setup.py 老式包）构建失败
+- [x] `start.sh` 一键启动脚本：首次自动建 venv + 装依赖，之后激活 venv 并启动 uvicorn
+- [x] README「快速开始」补充 venv / start.sh / setuptools 说明
+- [x] **CDN 资源本地化**：echarts / bootstrap(JS+CSS) 下载到 `static/vendor/`，`base.html` 改为本地引用；修复系统代理（Clash 7897）拦截 jsdelivr 返回 HTML、浏览器报 `Unexpected token '<'` 导致的白屏（commit 0b80668）
 
 ### 数据源
 - [x] 新浪 `hq.sinajs.cn` 实时行情（指数、个股、ETF）

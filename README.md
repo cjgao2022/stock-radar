@@ -33,17 +33,26 @@ A股行情研究本地网站。每日追踪大盘情绪、板块涨跌、资金�
 
 ## 快速开始
 
-**环境要求**：Python 3.11+
+**环境要求**：Python 3.11+（已在 3.14 验证）
+
+一键启动（首次自动建虚拟环境并装依赖）：
 
 ```bash
-# 安装依赖
-pip install -r requirements.txt
+./start.sh
+```
 
-# 启动
+或手动：
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate          # 每次新开终端启动前都要先执行
+pip install -r requirements.txt
 uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 浏览器访问 `http://127.0.0.1:8000`
+
+> **注意**：Python 3.12+ 的 venv 默认不预装 setuptools，而 akshare 的传递依赖 `jsonpath` 是 setup.py 老式包、构建时需要它，因此 `requirements.txt` 顶部显式声明了 `setuptools`/`wheel`。
 
 ## 配置
 
