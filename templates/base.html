@@ -137,6 +137,10 @@
     }
     .topnav .nav-links a:hover  { color: #fff; background: rgba(255,255,255,.1); }
     .topnav .nav-links a.active { color: #fff; background: rgba(61,126,252,.35); }
+    .topnav .nav-links .nav-sep {
+      width: 1px; height: 16px; align-self: center;
+      background: rgba(255,255,255,.14); margin: 0 var(--sp-1);
+    }
 
     /* 导航栏右侧 */
     .topnav .market-status {
@@ -203,6 +207,12 @@
       padding: var(--sp-3) var(--sp-4); font-size: var(--fs-sm); font-weight: 600; letter-spacing: .6px;
       display: flex; align-items: center; justify-content: space-between;
     }
+    /* 次级面板头：去深色底、文字降级，与主锚点面板拉开层级 */
+    .panel-hd.subtle {
+      background: transparent; color: var(--text2);
+      border-bottom: 1px solid var(--border);
+    }
+    .panel-hd.subtle .accent-bar { opacity: .75; }
     .panel-hd .hd-title { display: flex; align-items: center; gap: 8px; }
     .panel-hd .accent-bar {
       width: 3px; height: 14px;
@@ -328,10 +338,12 @@
     [data-theme="light"] .topnav .nav-links a { color: var(--text2); }
     [data-theme="light"] .topnav .nav-links a:hover  { color: var(--text1); background: #f0f3fa; }
     [data-theme="light"] .topnav .nav-links a.active { color: var(--accent); background: #e8f0fe; }
+    [data-theme="light"] .topnav .nav-links .nav-sep { background: var(--border2); }
     [data-theme="light"] .topnav .market-status { color: var(--text3); }
     [data-theme="light"] .theme-btn { border-color: var(--border2); background: var(--flat-bg); color: var(--text2); }
 
     /* panel-hd */
+    [data-theme="light"] .panel-hd.subtle { background: transparent; color: var(--text2); }
     [data-theme="light"] .panel-hd {
       background: #f7f9fc;
       color: var(--text1);
@@ -432,13 +444,16 @@
   </a>
   <div class="nav-links">
     <a href="/"          id="nav-overview">大盘</a>
+    <span class="nav-sep"></span>
+    <a href="/macro"     id="nav-macro">宏观</a>
+    <a href="/valuation" id="nav-valuation">估值</a>
+    <span class="nav-sep"></span>
     <a href="/boards"    id="nav-boards">板块</a>
+    <a href="/leaders"   id="nav-leaders">龙头</a>
+    <span class="nav-sep"></span>
     <a href="/stocks"    id="nav-stocks">个股</a>
     <a href="/etf"       id="nav-etf">ETF</a>
-    <a href="/valuation" id="nav-valuation">估值</a>
-    <a href="/macro"     id="nav-macro">宏观</a>
     <a href="/news"      id="nav-news">资讯</a>
-    <a href="/leaders"   id="nav-leaders">龙头</a>
   </div>
   <div class="market-status">
     <button class="theme-btn" id="theme-btn" title="切换主题" onclick="toggleTheme()">🌙</button>
