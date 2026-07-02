@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from data.fetchers.stocks import fetch_watchlist, fetch_etf_watchlist, search_stock, search_etf, fetch_stock_kline, fetch_quotes, fetch_etf_meta
 from data.fetchers.flow import fetch_stock_flow, fetch_stock_flow_rank_all
 from data.fetchers.fundamentals import fetch_stock_fundamental, fetch_stock_financials_history
+from data.fetchers.valuation_stock import fetch_stock_valuation
 from data.watchlist_store import add_stock, remove_stock, add_etf, remove_etf, update_stock_cost, update_etf_cost
 from data.cache import get_cached
 
@@ -193,6 +194,14 @@ def api_stock_financials(code: str):
     today = _date.today()
     key = f"financials_{code}_{today}"
     return get_cached(key, 21600, lambda: fetch_stock_financials_history(code))
+
+
+@router.get("/{code}/valuation")
+def api_stock_valuation(code: str):
+    """个股 PE(TTM)/PB 当前值 + 近1年历史分位（百度股市通，6小时缓存）"""
+    today = _date.today()
+    key = f"val_{code}_{today}"
+    return get_cached(key, 21600, lambda: fetch_stock_valuation(code))
 
 
 @router.get("/{code}/flow")

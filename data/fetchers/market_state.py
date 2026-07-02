@@ -103,9 +103,30 @@ def fetch_market_valuation() -> dict:
             chart_pe.append(round(float(pe_val), 2))
             chart_erp.append(round(100 / pe_val - by, 2) if by else None)
 
+        # ── 全A 股息率 + 近5年分位（乐咕乐股，独立 try 不影响 PE/ERP） ──
+        dividend = dividend_5y_pct = None
+        try:
+            with _AK_LOCK:
+                dv_raw = ak.stock_a_gxl_lg(symbol='上证A股')
+            dv_df = dv_raw[['日期', '股息率']].copy()
+            dv_df.columns = ['date', 'dv']
+            dv_df['dv'] = pd.to_numeric(dv_df['dv'], errors='coerce')
+            dv_df['date'] = pd.to_datetime(dv_df['date'])
+            dv_df = dv_df.dropna().set_index('date').sort_index()
+            dividend = round(float(dv_df['dv'].iloc[-1]), 2)
+            cutoff_dv = pd.Timestamp.now() - pd.Timedelta(days=365 * 5)
+            s_dv = dv_df.loc[dv_df.index >= cutoff_dv, 'dv']
+            if len(s_dv) >= 2:
+                # 股息率越高越有吸引力 → 分位=当前高于历史的占比
+                dividend_5y_pct = round(100 * (s_dv < dividend).sum() / len(s_dv), 1)
+        except Exception:
+            pass
+
         result = {
             'pe':           round(current_pe, 2),
             'date':         current_date,
+            'dividend':     dividend,
+            'dividend_5y_pct': dividend_5y_pct,
             'pe_5y_pct':    pct_5y,
             'pe_10y_pct':   pct_10y,
             'label':        label,

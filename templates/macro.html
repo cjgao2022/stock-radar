@@ -43,7 +43,7 @@
         <div class="hd-title"><div class="accent-bar"></div>市场估值温度</div>
         <span id="val-hint" style="font-size:.72rem;color:var(--text2)">加载中...</span>
       </div>
-      <!-- 4个核心指标 -->
+      <!-- 5个核心指标 -->
       <div class="val-stat-row">
         <div class="val-stat">
           <div class="val-label">全A滚动PE</div>
@@ -64,6 +64,11 @@
           <div class="val-label">10年国债收益率</div>
           <div class="val-num" id="val-bond">--</div>
           <div class="val-sub" id="val-pct5">近5年分位 --</div>
+        </div>
+        <div class="val-stat" title="全A股息率及近5年分位；分位越高=当前股息率越处历史高位，越有配置吸引力">
+          <div class="val-label">全A股息率</div>
+          <div class="val-num" id="val-div">--</div>
+          <div class="val-sub" id="val-div-pct">近5年分位 --</div>
         </div>
       </div>
       <!-- ERP + PE 历史走势图 -->
@@ -308,6 +313,10 @@ function renderValuation(d) {
     d.bond_yield != null ? d.bond_yield.toFixed(4) + '%' : '--';
   document.getElementById('val-pct5').textContent    =
     d.pe_5y_pct != null ? `近5年分位 ${d.pe_5y_pct}%` : '';
+  document.getElementById('val-div').textContent     =
+    d.dividend != null ? d.dividend.toFixed(2) + '%' : '--';
+  document.getElementById('val-div-pct').textContent =
+    d.dividend_5y_pct != null ? `近5年分位 ${d.dividend_5y_pct}%` : '近5年分位 --';
   document.getElementById('val-hint').textContent    = d.label || '';
   document.getElementById('val-hint').className      = colorCls;
 

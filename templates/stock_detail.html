@@ -49,6 +49,8 @@
       <div class="dm-item"><div class="dm-label">成交额</div><div class="dm-val num" id="d-amount">--</div></div>
       <div class="dm-item"><div class="dm-label">市盈率 PE(静)</div><div class="dm-val num" id="d-pe">--</div></div>
       <div class="dm-item"><div class="dm-label">市净率 PB</div><div class="dm-val num" id="d-pb">--</div></div>
+      <div class="dm-item" title="PE(TTM) 及其近1年历史分位，分位越低越便宜"><div class="dm-label">PE(TTM)·近1年分位</div><div class="dm-val num" id="d-pe-ttm">--</div></div>
+      <div class="dm-item" title="PB 及其近1年历史分位"><div class="dm-label">PB·近1年分位</div><div class="dm-val num" id="d-pb-pct">--</div></div>
       <div class="dm-item"><div class="dm-label">ROE</div><div class="dm-val num" id="d-roe">--</div></div>
       <div class="dm-item"><div class="dm-label">净利润增速</div><div class="dm-val num" id="d-pyoy">--</div></div>
       <div class="dm-item"><div class="dm-label">今日最高</div><div class="dm-val num up" id="d-high">--</div></div>
@@ -164,6 +166,19 @@ fetch(`/api/stocks/fundamentals?codes=${_code}`).then(r=>r.json()).then(fund=>{
     const pyoyEl=document.getElementById('d-pyoy');
     if(f.profit_yoy!=null) pyoyEl.className=`dm-val num ${pCls(f.profit_yoy)}`;
   });
+});
+
+// ── 估值历史分位（PE-TTM / PB，百度股市通） ───────────────────
+fetch(`/api/stocks/${_code}/valuation`).then(r=>r.json()).then(v=>{
+  if(!v||v.error) return;
+  const cmap={green:'#18a361',orange:'#f5a623',red:'#e8374a'};
+  const cell=(val,unit,pct,label,color)=>{
+    if(val==null){return '--';}
+    const pctTxt=pct!=null?`<span style="font-size:.62rem;color:${cmap[color]||'var(--text3)'};font-weight:600">${pct}%·${label}</span>`:'';
+    return `${val.toFixed(unit==='x'?(val<10?2:1):2)}${unit} ${pctTxt}`;
+  };
+  document.getElementById('d-pe-ttm').innerHTML=cell(v.pe_ttm,'x',v.pe_pct,v.pe_label&&v.pe_label.replace('区间',''),v.pe_color);
+  document.getElementById('d-pb-pct').innerHTML=cell(v.pb,'x',v.pb_pct,v.pb_label&&v.pb_label.replace('区间',''),v.pb_color);
 });
 
 // ── K线 ────────────────────────────────────────────────────

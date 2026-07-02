@@ -193,6 +193,8 @@ stock-radar/
 | 全A市场PE历史分位 + 股债比价（ERP） | 乐咕乐股 | `stock_index_pe_lg()`；返回 2005 至今日频全A市盈率（等权/静态/滚动，3类×中位数变体）；用于计算历史百分位；与 `bond_zh_us_rate()` 合算 ERP = (1/PE)×100 − 10年国债收益率；文件：`data/fetchers/market_state.py` |
 | 10年期国债收益率 | 宏观（via AKShare） | `bond_zh_us_rate(start_date='YYYYMMDD')`；字段：`中国国债收益率10年`；与 PE倒数合算 ERP；文件：`data/fetchers/market_state.py` |
 | 两融余额历史趋势 | 证券交易所（via AKShare） | `stock_margin_account_info()`；无参；返回全市场日频 融资余额/融券余额/融资买入额（亿元）；2013至今，约3300+行；文件：`data/fetchers/market_state.py` |
+| 个股估值历史分位（PE-TTM / PB） | 百度股市通 | `stock_zh_valuation_baidu(symbol='600519', indicator='市盈率(TTM)'\|'市净率', period='近一年')`；返回近1年日频 `date/value`（约 366 行）；非 push2，代理封锁下可用；用于算个股当前 PE(TTM)/PB + 近1年历史分位；文件：`data/fetchers/valuation_stock.py`；6h 缓存 |
+| 全A市场股息率历史 | 乐咕乐股 | `stock_a_gxl_lg(symbol='上证A股')`；返回 `日期/股息率`（约 5200+ 行，2005至今日频）；用于市场股息率当前值 + 近5年分位，与 ERP 并列作股债性价比参考；文件：`data/fetchers/market_state.py` |
 
 ---
 
