@@ -11,11 +11,14 @@ stock-radar/
 ├── CLAUDE.md              # 项目规范（本文件）
 ├── ROADMAP.md             # 项目进度与待办
 ├── config.yaml            # 主配置：关注指数、自选股、调度时间
+├── start.sh               # 一键启动（首次自动建 venv + 装依赖）
 ├── main.py                # FastAPI 入口 + 启动调度器
-├── requirements.txt
+├── requirements.txt       # 顶部含 setuptools/wheel（Py3.12+ venv 需要，jsonpath 构建）
 ├── .env.example
 ├── db/
 │   └── snapshot.db        # SQLite 日快照（git 忽略）
+├── static/
+│   └── vendor/            # echarts / bootstrap 本地化（规避 CDN 被代理拦截白屏）
 ├── data/
 │   ├── cache.py           # SQLite 初始化 + 内存 TTL 缓存
 │   ├── scheduler.py       # APScheduler 盘后任务
@@ -24,23 +27,35 @@ stock-radar/
 │       ├── indices.py     # 新浪实时指数
 │       ├── boards.py      # 板块列表 + 构成股 + K 线
 │       ├── stocks.py      # 个股/ETF 行情、搜索、持仓
-│       ├── flow.py        # 资金流向（THS + 东方财富）
-│       └── market.py      # 市场情绪（涨跌家数、龙虎榜）
+│       ├── flow.py        # 资金流向（THS + 东方财富）+ 涨停板
+│       ├── market.py      # 市场情绪（涨跌家数、龙虎榜）
+│       ├── fundamentals.py    # 个股基本面 + 财务趋势（THS）
+│       ├── valuation.py       # 行业估值 PE（巨潮）
+│       ├── valuation_stock.py # 个股 PE(TTM)/PB 近1年历史分位（百度股市通）
+│       ├── market_state.py    # 市场估值温度（PE分位/ERP/股息率）+ 两融
+│       ├── macro.py           # 宏观指标 CPI/PPI/PMI/M2 + 日历
+│       ├── news.py            # 公告 + 研报
+│       └── leaders.py         # 申万一/二级行业龙头
 ├── api/
 │   ├── routes_overview.py # GET /api/indices /api/flow/* /api/market/* /api/zt
 │   ├── routes_boards.py   # GET /api/boards /api/boards/{type}/{name}/*
-│   ├── routes_stocks.py   # GET/POST/DELETE /api/stocks/* /api/stocks/etf/* /api/stocks/{code}/kline
+│   ├── routes_stocks.py   # GET/POST/DELETE /api/stocks/*；含 /{code}/kline /flow /financials /valuation
 │   ├── routes_news.py     # GET /api/news/announcements /api/news/research
-│   └── routes_leaders.py  # GET /api/leaders
+│   ├── routes_leaders.py  # GET /api/leaders /api/leaders/level2
+│   ├── routes_valuation.py # GET /api/valuation/industry_pe
+│   └── routes_macro.py    # GET /api/macro/indicators /calendar /valuation /margin
 └── templates/
-    ├── base.html          # Bootstrap 5 Navbar（时钟 yyyy-mm-dd hh:mm:ss）+ 布局骨架 + 口令弹框 + K线弹框（全局）
-    ├── overview.html      # 首页：指数卡片 + 市场情绪面板（涨跌家数/成交额/近60日历史图）+ 热力图 + 资金 + 涨停 + 龙虎榜
-    ├── boards.html        # 板块列表（概念/行业 Tab）
-    ├── board_detail.html  # 板块详情 + K 线（30/90/180/365日切换）+ 构成股
-    ├── stocks.html        # 个股持仓 + 搜索
-    ├── etf.html           # ETF 持仓 + 搜索
+    ├── base.html          # Navbar（分组导航+时钟）+ 页面头（page_title/subtitle）+ 设计token + 口令弹框 + K线弹框（全局）
+    ├── overview.html      # 大盘：指数卡 + 情绪面板（涨跌停比/估值条）+ 热力图 + 资金 + 涨停(行业分布) + 龙虎榜(原因) + 连板追踪(晋级率)
+    ├── boards.html        # 板块列表（概念/行业 Tab）+ 行业轮动
+    ├── board_detail.html  # 板块详情 + K 线（30/90/180/365日 + 月/年K）+ 构成股
+    ├── stocks.html        # 个股持仓（PE静/PB/ROE/利润增速）+ 搜索 + 主力资金
+    ├── stock_detail.html  # 个股详情：估值分位 + K线(MA/MACD/KDJ/RSI) + 资金流 + 财务趋势
+    ├── etf.html           # ETF 持仓（规模/折溢价）+ 搜索
+    ├── valuation.html     # 行业估值（证监会分类 PE，一/二级）
+    ├── macro.html         # 宏观：估值温度(PE分位/ERP/股息率) + CPI/PPI/PMI/M2 + 两融
     ├── news.html          # 公告（持仓股/全市场）+ 研究报告，分页10条/页
-    └── leaders.html       # 申万一级行业龙头（成交额 TOP5，支持排序）
+    └── leaders.html       # 申万一/二级行业龙头（成交额 TOP5，支持排序）
 ```
 
 ## 数据源详细说明
