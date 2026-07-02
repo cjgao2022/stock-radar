@@ -168,6 +168,11 @@
         <span class="bs-label">成交额</span>
         <span class="bs-val" id="b-amount" style="font-size:.82rem;color:var(--text1)">--</span>
       </div>
+      <div class="bs-divider"></div>
+      <div class="bs-row" title="涨停数÷跌停数，反映赚钱效应；>1 偏强，<1 偏弱">
+        <span class="bs-label">涨跌停比</span>
+        <span class="bs-val" id="b-ztdt" style="font-size:.82rem">--</span>
+      </div>
     </div>
     <!-- 右：近60日历史图 -->
     <div class="breadth-chart-wrap">
@@ -233,7 +238,9 @@
         </div>
       </div>
       <!-- 连板梯队摘要 -->
-      <div id="tier-bar" class="px-3 pt-2 pb-1 d-flex gap-2 flex-wrap flex-shrink-0 panel-dark-body" style="border-bottom:1px solid var(--border)"></div>
+      <div id="tier-bar" class="px-3 pt-2 pb-1 d-flex gap-2 flex-wrap flex-shrink-0 panel-dark-body"></div>
+      <!-- 涨停行业分布（市场主线代理） -->
+      <div id="zt-industry" class="px-3 pb-2 d-flex gap-2 flex-wrap align-items-center flex-shrink-0 panel-dark-body" style="border-bottom:1px solid var(--border)"></div>
       <div class="panel-body-flush panel-dark-body flex-grow-1" style="min-height:0;overflow-y:auto">
         <table class="data-table dt-dark" id="zt-table">
           <thead style="position:sticky;top:0;z-index:1">
@@ -347,6 +354,13 @@ fetch('/api/market/breadth').then(r=>r.json()).then(d=>{
   document.getElementById('b-flat').textContent = d.flat||0;
   document.getElementById('b-down').textContent = d.down||0;
   document.getElementById('b-dt').textContent  = d.dt||0;
+  const zt=d.zt||0, dt=d.dt||0;
+  const ztdtEl=document.getElementById('b-ztdt');
+  if(ztdtEl){
+    const ratio = dt>0 ? (zt/dt) : (zt>0 ? Infinity : 0);
+    ztdtEl.textContent = dt>0 ? (zt/dt).toFixed(1) : (zt>0 ? `${zt}:0` : '0');
+    ztdtEl.className = 'bs-val ' + (ratio>=1 ? 'up' : ratio>0 ? 'down' : 'flat');
+  }
 });
 
 /* ── ① bis 情绪历史图 ── */
@@ -528,6 +542,18 @@ function loadZT(){
       </div>`;
     }).join('<span style="color:var(--border2);margin:0 4px">·</span>');
 
+    // 涨停行业分布（TOP，市场主线代理）
+    const indMap={};
+    rows.forEach(d=>{const k=d.industry||'其他';indMap[k]=(indMap[k]||0)+1;});
+    const indTop=Object.entries(indMap).sort((a,b)=>b[1]-a[1]).slice(0,6);
+    const indEl=document.getElementById('zt-industry');
+    if(indEl){
+      indEl.innerHTML=indTop.length
+        ? `<span style="font-size:.68rem;color:var(--text3);letter-spacing:.3px">主线</span>`+
+          indTop.map(([name,cnt])=>`<span style="font-size:.72rem;color:var(--text2)">${name}<b class="up" style="margin-left:2px">${cnt}</b></span>`).join('')
+        : '';
+    }
+
     const tbody=document.querySelector('#zt-table tbody');
     if(!rows.length){tbody.innerHTML='<tr><td colspan="6" class="text-center text-muted py-3">暂无数据或非交易日</td></tr>';return;}
 
@@ -644,6 +670,12 @@ fetch('/api/market/zt_history').then(r=>r.json()).then(resp=>{
         <td class="text-center">${badgeHtml}</td>
       </tr>`;
     }).join('');
+    // 连板晋级率 = 今日继续涨停数 ÷ 昨日连板数（赚钱效应/接力强度）
+    const promoted=ytRows.filter(d=>{const q=qMap[d.code];return q&&q.change_pct!=null&&q.change_pct>=9.9;}).length;
+    const rate=ytRows.length?Math.round(100*promoted/ytRows.length):0;
+    const rateCls=rate>=50?'up':rate>0?'flat':'down';
+    document.getElementById('track-count').innerHTML=
+      `${ytRows.length} 只连板股 · 晋级率 <b class="${rateCls}">${rate}%</b>`;
   }).catch(()=>{});
 }).catch(()=>{
   document.getElementById('track-tbody').innerHTML=
