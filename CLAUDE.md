@@ -100,7 +100,6 @@ stock-radar/
 | `stock_fund_flow_concept(symbol="即时")` | 概念板块列表：涨跌幅、净流入、领涨股及涨跌幅 | 板块页概念 Tab |
 | `stock_board_industry_summary_ths()` | 行业板块汇总：涨跌幅、上涨/下跌家数、领涨股、净流入 | 板块页行业 Tab |
 | `stock_fund_flow_industry(symbol="即时")` | 行业资金流向排行（净额降序） | 首页行业资金流 TOP10 |
-| `stock_fund_flow_individual(stock, market)` | 个股资金流向明细 | 个股详情页（预留） |
 | `stock_fund_flow_individual(symbol="即时")` | 全市场个股主力净流入排行（不区分超大单/散户） | 个股页主力资金面板 |
 | `stock_board_industry_index_ths(symbol, start_date, end_date)` | 行业板块近 N 日 K 线 | 板块详情页 K 线图 |
 | `stock_board_concept_index_ths(symbol, start_date, end_date)` | 概念板块近 N 日 K 线 | 板块详情页 K 线图 |
@@ -122,6 +121,7 @@ stock-radar/
 | `stock_board_concept_cons_em(symbol)` | 概念板块构成股行情 | 板块详情构成股表 | **易被封** |
 | `stock_board_industry_cons_em(symbol)` | 行业板块构成股行情 | 板块详情构成股表 | **易被封** |
 | `stock_lhb_detail_em(start_date, end_date)` | 今日龙虎榜 | 首页龙虎榜 | 是 |
+| `stock_individual_fund_flow(stock, market)` | 个股资金流向明细（按日主力/超大单/大单/中单/小单净流入，取最新一日） | 个股详情页主力资金面板 | **易被封**（`push2his.eastmoney.com`，与 push2 同域被封） |
 
 **龙虎榜注意事项**：
 - **必须传日期参数**：`start_date` 和 `end_date` 默认值硬编码为 2023 年，不传参会取旧数据
@@ -190,7 +190,7 @@ stock-radar/
 | 概念板块列表 | THS | `stock_fund_flow_concept(symbol="即时")` |
 | 行业板块列表 | THS | `stock_board_industry_summary_ths()` |
 | 行业资金流向 | THS | `stock_fund_flow_industry(symbol="即时")` |
-| 个股资金流向（明细） | THS | `stock_fund_flow_individual(stock, market)` |
+| 个股资金流向（明细） | 东方财富 | `stock_individual_fund_flow(stock, market)`；**易被封**（push2his 与 push2 同域） |
 | 个股主力净流入排行 | THS | `stock_fund_flow_individual(symbol="即时")` |
 | 板块 K 线（日K/月K/年K） | THS | `stock_board_industry/concept_index_ths()`；月K/年K 由 Python pandas resample 日线合成（1500/1800日）|
 | ETF 规模/折溢价率 | 东方财富 | `fund_etf_spot_em()`；字段：`总市值`（÷1e8=亿元）、`基金折价率`（%，正为折价）；30分钟缓存 |

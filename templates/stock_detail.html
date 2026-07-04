@@ -129,8 +129,10 @@ function fmtP(v){ if(v==null)return'--'; return(v>=0?'+':'')+Number(v).toFixed(2
 function fmtM(v){ if(v==null)return'--'; const a=Math.abs(v); return(v>=0?'+':'-')+(a>=1e8?(a/1e8).toFixed(2)+'亿':a>=1e4?(a/1e4).toFixed(0)+'万':a.toFixed(0)); }
 function pCls(v){ return v>0?'up':v<0?'down':'flat'; }
 
-// ── 实时报价 ────────────────────────────────────────────────
-fetch(`/api/stocks/batch_quotes?codes=${_code}`).then(r=>r.json()).then(list=>{
+// ── 实时报价（fundamentals 面板计算PE/PB也复用这一份，不重复请求） ──
+const _quotePromise = fetch(`/api/stocks/batch_quotes?codes=${_code}`).then(r=>r.json());
+
+_quotePromise.then(list=>{
   const d=(list||[]).find(x=>x.code===_code);
   if(!d) return;
   document.getElementById('detail-name').textContent=d.name||_code;
@@ -149,12 +151,14 @@ fetch(`/api/stocks/batch_quotes?codes=${_code}`).then(r=>r.json()).then(list=>{
   document.getElementById('d-high').textContent=d.high!=null?Number(d.high).toFixed(2):'--';
   document.getElementById('d-low').textContent=d.low!=null?Number(d.low).toFixed(2):'--';
   document.getElementById('d-prev').textContent=d.prev_close!=null?Number(d.prev_close).toFixed(2):'--';
+}).catch(()=>{
+  document.getElementById('d-price').textContent='加载失败';
 });
 
 // ── 基本面 ─────────────────────────────────────────────────
 fetch(`/api/stocks/fundamentals?codes=${_code}`).then(r=>r.json()).then(fund=>{
   const f=fund[_code]||{};
-  fetch(`/api/stocks/batch_quotes?codes=${_code}`).then(r=>r.json()).then(list=>{
+  _quotePromise.then(list=>{
     const d=(list||[]).find(x=>x.code===_code);
     if(!d) return;
     const pe=f.eps&&d.price?d.price/f.eps:null;
@@ -165,7 +169,11 @@ fetch(`/api/stocks/fundamentals?codes=${_code}`).then(r=>r.json()).then(fund=>{
     document.getElementById('d-pyoy').textContent=f.profit_yoy!=null?fmtP(f.profit_yoy):'--';
     const pyoyEl=document.getElementById('d-pyoy');
     if(f.profit_yoy!=null) pyoyEl.className=`dm-val num ${pCls(f.profit_yoy)}`;
+  }).catch(()=>{
+    document.getElementById('d-pe').textContent='加载失败';
   });
+}).catch(()=>{
+  document.getElementById('d-pe').textContent='加载失败';
 });
 
 // ── 估值历史分位（PE-TTM / PB，百度股市通） ───────────────────
@@ -179,6 +187,9 @@ fetch(`/api/stocks/${_code}/valuation`).then(r=>r.json()).then(v=>{
   };
   document.getElementById('d-pe-ttm').innerHTML=cell(v.pe_ttm,'x',v.pe_pct,v.pe_label&&v.pe_label.replace('区间',''),v.pe_color);
   document.getElementById('d-pb-pct').innerHTML=cell(v.pb,'x',v.pb_pct,v.pb_label&&v.pb_label.replace('区间',''),v.pb_color);
+}).catch(()=>{
+  document.getElementById('d-pe-ttm').textContent='加载失败';
+  document.getElementById('d-pb-pct').textContent='加载失败';
 });
 
 // ── K线 ────────────────────────────────────────────────────

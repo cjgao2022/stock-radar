@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% block title %}行业龙头 - 股票雷达{% endblock %}
 {% block page_title %}行业龙头{% endblock %}
-{% block page_subtitle %}申万一/二级行业成交额 TOP5{% endblock %}
 
 {% block head %}
 <style>
@@ -64,12 +63,6 @@
     display:flex; flex-direction:column; align-items:center; justify-content:center;
     padding:60px 20px; gap:12px; color:var(--text2); font-size:.88rem;
   }
-  .loading-spinner {
-    width:32px; height:32px; border:3px solid var(--border);
-    border-top-color:var(--accent); border-radius:50%;
-    animation:spin .8s linear infinite;
-  }
-  @keyframes spin { to { transform:rotate(360deg); } }
 
   [data-theme="light"] .ind-card-hd { background:#f7f9fc; border-bottom:1px solid var(--border); }
 
@@ -106,12 +99,8 @@
       <button class="sort-btn"        id="sort-name"   onclick="sortBy('name')">行业名称</button>
     </div>
 
-    <div id="leaders-container">
-      <div class="loading-mask">
-        <div class="loading-spinner"></div>
-        <span>正在加载行业龙头数据，首次约 60 秒，之后 30 分钟缓存...</span>
-      </div>
-    </div>
+    <div id="leaders-container"></div>
+    <div id="leaders-progress" class="skeleton-hint">正在拉取行业成交额排名，首次约 60 秒，之后 30 分钟内再访问秒开...</div>
 
   </div>
 </div>
@@ -130,6 +119,32 @@ function chgClass(v) {
   if (v > 0) return 'up';
   if (v < 0) return 'down';
   return 'flat';
+}
+
+// 贴合最终卡片布局的骨架屏占位（对应真实的 .ind-card 结构）
+function skeletonCard() {
+  const rows = Array.from({length: 5}, () => `<tr>
+    <td><span class="skeleton" style="width:36px;height:11px"></span></td>
+    <td><span class="skeleton" style="width:64px;height:11px"></span></td>
+    <td><span class="skeleton" style="width:32px;height:11px;float:right"></span></td>
+    <td><span class="skeleton" style="width:36px;height:11px;float:right"></span></td>
+    <td><span class="skeleton" style="width:32px;height:11px;float:right"></span></td>
+  </tr>`).join('');
+  return `<div class="ind-card">
+    <div class="ind-card-hd">
+      <span class="skeleton" style="width:70px;height:13px"></span>
+      <span class="skeleton" style="width:44px;height:13px"></span>
+    </div>
+    <table class="ind-table">
+      <colgroup><col style="width:58px"><col><col style="width:56px"><col style="width:62px"><col style="width:56px"></colgroup>
+      ${rows}
+    </table>
+  </div>`;
+}
+
+function renderSkeleton(count) {
+  document.getElementById('leaders-container').innerHTML =
+    `<div class="leaders-grid">${Array.from({length: count}, skeletonCard).join('')}</div>`;
 }
 
 function chgText(v) {
@@ -177,17 +192,21 @@ function switchTab(tab) {
   }
 }
 
+function updateProgress(text) {
+  document.getElementById('leaders-progress').textContent = text;
+}
+
 function loadL2() {
   _l2Loading = true;
-  updateHint('加载中，首次约 2-3 分钟（约 100 个二级行业），之后 30 分钟缓存');
-  document.getElementById('leaders-container').innerHTML =
-    `<div class="loading-mask"><div class="loading-spinner"></div>
-     <span>正在加载二级行业龙头，首次约 2-3 分钟，之后 30 分钟缓存...</span></div>`;
+  updateHint('加载中...');
+  updateProgress('正在拉取二级行业成交额排名（约100个行业），首次约 2-3 分钟，之后 30 分钟内再访问秒开...');
+  renderSkeleton(8);
 
   fetch('/api/leaders/level2')
     .then(r => r.json())
     .then(data => {
       _l2Loading = false;
+      updateProgress('');
       if (data && data[0] && data[0].error) {
         if (_activeTab === 'l2') {
           updateHint('加载失败');
@@ -204,10 +223,11 @@ function loadL2() {
     })
     .catch(err => {
       _l2Loading = false;
+      updateProgress('');
       if (_activeTab === 'l2') {
         updateHint('加载失败');
         document.getElementById('leaders-container').innerHTML =
-          `<div class="loading-mask"><span style="color:var(--down)">请求失败：${err.message}</span></div>`;
+          `<div class="loading-mask"><span style="color:var(--down)">加载失败：${err.message}</span></div>`;
       }
     });
 }
@@ -239,8 +259,8 @@ function renderLeaders(data) {
       ? stocks.map(s => {
           const sc = chgClass(s.chg_pct);
           return `<tr>
-            <td class="td-code" onclick="openKline('${s.code}','${s.name}')">${s.code}</td>
-            <td class="td-name">${s.name}</td>
+            <td class="td-code" onclick="openKline('${escJsAttr(s.code)}','${escJsAttr(s.name)}')">${escHtml(s.code)}</td>
+            <td class="td-name">${escHtml(s.name)}</td>
             <td class="td-price ${sc}">${parseFloat(s.price || 0).toFixed(2)}</td>
             <td class="td-chg  ${sc}">${chgText(s.chg_pct)}</td>
             <td class="td-amt">${parseFloat(s.amount_yi || 0).toFixed(1)}亿</td>
@@ -277,9 +297,11 @@ function openKline(code, name) {
 }
 
 // ── 初始加载一级行业 ───────────────────────────────────────────
+renderSkeleton(8);
 fetch('/api/leaders')
   .then(r => r.json())
   .then(data => {
+    updateProgress('');
     if (data && data[0] && data[0].error) {
       updateHint('加载失败');
       document.getElementById('leaders-container').innerHTML =
@@ -293,9 +315,10 @@ fetch('/api/leaders')
     }
   })
   .catch(err => {
+    updateProgress('');
     updateHint('加载失败');
     document.getElementById('leaders-container').innerHTML =
-      `<div class="loading-mask"><span style="color:var(--down)">请求失败：${err.message}</span></div>`;
+      `<div class="loading-mask"><span style="color:var(--down)">加载失败：${err.message}</span></div>`;
   });
 </script>
 {% endblock %}

@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% block title %}公告研报 - 股票雷达{% endblock %}
 {% block page_title %}公告研报{% endblock %}
-{% block page_subtitle %}持仓与全市场公告、机构研报{% endblock %}
 
 {% block head %}
 <style>
@@ -14,14 +13,31 @@
   .news-tab.active { background:var(--accent); border-color:var(--accent); color:#fff; }
   .news-tab:hover:not(.active) { border-color:var(--accent); color:var(--accent); }
 
-  .type-filter { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:10px; }
-  .type-chip {
-    padding:3px 10px; border-radius:12px; font-size:.72rem; cursor:pointer;
-    border:1px solid var(--border); background:transparent; color:var(--text2);
-    transition:all .12s;
+  .type-combo { position:relative; display:inline-block; margin-bottom:10px; }
+  .type-combo-input {
+    padding:5px 28px 5px 10px; border-radius:7px; border:1.5px solid var(--border2);
+    background:var(--input-bg); color:var(--text1); font-size:.8rem; outline:none;
+    width:180px; transition:border-color .15s;
   }
-  .type-chip.active { background:var(--accent2); border-color:var(--accent2); color:#fff; }
-  .type-chip:hover:not(.active) { border-color:var(--accent2); color:var(--accent2); }
+  .type-combo-input:focus { border-color:var(--accent); }
+  .type-combo-arrow {
+    position:absolute; right:9px; top:50%; transform:translateY(-50%);
+    font-size:.65rem; color:var(--text3); pointer-events:none;
+  }
+  .type-combo-menu {
+    display:none; position:absolute; top:calc(100% + 4px); left:0; z-index:20;
+    min-width:180px; max-height:260px; overflow-y:auto;
+    background:var(--card-bg); border:1px solid var(--border2); border-radius:8px;
+    box-shadow:var(--shadow-md);
+  }
+  .type-combo-menu.open { display:block; }
+  .type-combo-item {
+    padding:6px 12px; font-size:.8rem; color:var(--text1); cursor:pointer;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .type-combo-item:hover, .type-combo-item.active { background:var(--accent2); color:#fff; }
+  .type-combo-item.empty { color:var(--text3); cursor:default; }
+  .type-combo-item.empty:hover { background:transparent; }
 
   .ann-link { color:var(--text1); text-decoration:none; word-break:break-all; }
   .ann-link:hover { color:var(--accent); text-decoration:underline; }
@@ -46,22 +62,6 @@
   [data-theme="light"] .stock-select { color-scheme:light; background:#fff; }
   [data-theme="dark"]  .stock-select option { background:#111827; color:#e0e8f0; }
   [data-theme="light"] .stock-select option { background:#ffffff; color:#1a2035; }
-
-  /* 分页 */
-  .pg-bar {
-    display:flex; align-items:center; gap:8px;
-    padding:8px 12px; font-size:.78rem; color:var(--text2);
-    border-top:1px solid var(--border);
-  }
-  .pg-btn {
-    width:28px; height:28px; border-radius:6px; border:1px solid var(--border2);
-    background:transparent; color:var(--text1); cursor:pointer; font-size:.9rem;
-    display:flex; align-items:center; justify-content:center; transition:all .12s;
-  }
-  .pg-btn:hover:not(:disabled) { border-color:var(--accent); color:var(--accent); }
-  .pg-btn:disabled { opacity:.35; cursor:not-allowed; }
-  .pg-info { font-variant-numeric:tabular-nums; }
-  .pg-total { margin-left:4px; color:var(--text3); font-size:.72rem; }
 </style>
 {% endblock %}
 
@@ -82,8 +82,12 @@
           <button class="news-tab"        id="tab-market"    onclick="switchAnnTab('market')">全市场</button>
         </div>
 
-        <div class="type-filter" id="type-filter">
-          <button class="type-chip active" data-type="">全部</button>
+        <div class="type-combo" id="type-combo">
+          <input type="text" class="type-combo-input" id="type-combo-input"
+                 placeholder="全部类型" autocomplete="off" spellcheck="false"
+                 oninput="onTypeComboInput()" onfocus="openTypeCombo()">
+          <span class="type-combo-arrow">▾</span>
+          <div class="type-combo-menu" id="type-combo-menu"></div>
         </div>
 
         <div class="table-responsive">
@@ -160,20 +164,6 @@ let _annScope    = 'watchlist';
 let _resData = [];
 let _resPage = 1;
 
-// ── 分页渲染 ───────────────────────────────────────────────────
-function renderPagination(containerId, page, total, onPageFn) {
-  const el = document.getElementById(containerId);
-  if (!el) return;
-  const totalPages = Math.ceil(total / PAGE_SIZE);
-  if (totalPages <= 1) { el.innerHTML = ''; return; }
-  el.innerHTML = `<div class="pg-bar">
-    <button class="pg-btn" onclick="${onPageFn}(${page - 1})" ${page <= 1 ? 'disabled' : ''}>‹</button>
-    <span class="pg-info">第 ${page} / ${totalPages} 页</span>
-    <button class="pg-btn" onclick="${onPageFn}(${page + 1})" ${page >= totalPages ? 'disabled' : ''}>›</button>
-    <span class="pg-total">共 ${total} 条</span>
-  </div>`;
-}
-
 // ── 公告 Tab 切换 ─────────────────────────────────────────────
 function switchAnnTab(scope) {
   _annScope = scope;
@@ -206,30 +196,66 @@ function loadAnnouncements() {
     .catch(() => {
       hint.textContent = '加载失败';
       document.getElementById('ann-tbody').innerHTML =
-        '<tr><td colspan="5" class="text-center text-danger py-3">请求失败</td></tr>';
+        '<tr><td colspan="5" class="text-center text-danger py-3">加载失败</td></tr>';
     });
 }
 
+// ── 类型筛选：可搜索下拉框 ──────────────────────────────────────
+let _annTypes = [];
+let _annType  = '';
+
 function buildTypeFilter(data) {
-  const types = [...new Set(data.map(d => d.type).filter(Boolean))].sort();
-  const wrap = document.getElementById('type-filter');
-  wrap.innerHTML = `<button class="type-chip active" data-type="" onclick="filterByType(this.dataset.type)">全部</button>` +
-    types.map(t => `<button class="type-chip" data-type="${t.replace(/&/g,'&amp;').replace(/"/g,'&quot;')}" onclick="filterByType(this.dataset.type)">${t}</button>`).join('');
+  _annTypes = [...new Set(data.map(d => d.type).filter(Boolean))].sort();
+  _annType = '';
+  document.getElementById('type-combo-input').value = '';
+  renderTypeComboMenu(_annTypes);
 }
 
-function filterByType(type) {
-  document.querySelectorAll('.type-chip').forEach(el => {
-    el.classList.toggle('active', el.dataset.type === type);
-  });
-  _annFiltered = type ? _annData.filter(d => d.type === type) : _annData;
-  _annPage = 1;
-  renderAnnPage();
+function renderTypeComboMenu(types) {
+  const menu = document.getElementById('type-combo-menu');
+  const items = [{ label: '全部', value: '' }, ...types.map(t => ({ label: t, value: t }))];
+  if (!types.length) {
+    menu.innerHTML = '<div class="type-combo-item empty">暂无类型</div>';
+    return;
+  }
+  menu.innerHTML = items.map(it =>
+    `<div class="type-combo-item${it.value === _annType ? ' active' : ''}" data-value="${escHtml(it.value)}">${escHtml(it.label)}</div>`
+  ).join('');
 }
+
+document.getElementById('type-combo-menu')?.addEventListener('click', e => {
+  const item = e.target.closest('.type-combo-item:not(.empty)');
+  if (item) selectType(item.dataset.value);
+});
+
+function openTypeCombo() {
+  document.getElementById('type-combo-menu').classList.add('open');
+  renderTypeComboMenu(_annTypes);
+}
+
+function onTypeComboInput() {
+  const q = document.getElementById('type-combo-input').value.trim();
+  const filtered = q ? _annTypes.filter(t => t.includes(q)) : _annTypes;
+  document.getElementById('type-combo-menu').classList.add('open');
+  renderTypeComboMenu(filtered);
+}
+
+function selectType(type) {
+  _annType = type;
+  document.getElementById('type-combo-input').value = type;
+  document.getElementById('type-combo-menu').classList.remove('open');
+  applyAnnFilter();
+}
+
+document.addEventListener('click', e => {
+  const combo = document.getElementById('type-combo');
+  if (combo && !combo.contains(e.target)) {
+    document.getElementById('type-combo-menu').classList.remove('open');
+  }
+});
 
 function applyAnnFilter() {
-  const active = document.querySelector('.type-chip.active');
-  const type = active ? active.dataset.type : '';
-  _annFiltered = type ? _annData.filter(d => d.type === type) : _annData;
+  _annFiltered = _annType ? _annData.filter(d => d.type === _annType) : _annData;
   _annPage = 1;
   renderAnnPage();
 }
@@ -252,17 +278,17 @@ function renderAnnPage() {
   const slice = _annFiltered.slice(start, start + PAGE_SIZE);
   tbody.innerHTML = slice.map(d => {
     const link = d.url
-      ? `<a class="ann-link" href="${d.url}" target="_blank" rel="noopener">${d.title}</a>`
-      : `<span class="title-cell">${d.title}</span>`;
+      ? `<a class="ann-link" href="${escHtml(d.url)}" target="_blank" rel="noopener">${escHtml(d.title)}</a>`
+      : `<span class="title-cell">${escHtml(d.title)}</span>`;
     return `<tr>
-      <td class="num" style="white-space:nowrap">${d.code}</td>
-      <td style="white-space:nowrap">${d.name}</td>
+      <td class="num" style="white-space:nowrap">${escHtml(d.code) || '—'}</td>
+      <td style="white-space:nowrap">${escHtml(d.name) || '—'}</td>
       <td class="title-cell">${link}</td>
-      <td style="font-size:.76rem;color:var(--text2);white-space:nowrap">${d.type || '—'}</td>
-      <td class="num" style="white-space:nowrap;color:var(--text2)">${d.date || '—'}</td>
+      <td style="font-size:.76rem;color:var(--text2);white-space:nowrap">${escHtml(d.type) || '—'}</td>
+      <td class="num" style="white-space:nowrap;color:var(--text2)">${escHtml(d.date) || '—'}</td>
     </tr>`;
   }).join('');
-  renderPagination('ann-pagination', _annPage, total, 'annGoPage');
+  renderPagination('ann-pagination', _annPage, total, PAGE_SIZE, 'annGoPage');
 }
 
 // ── 研报 ───────────────────────────────────────────────────────
@@ -283,13 +309,18 @@ function loadResearch() {
   fetch(`/api/news/research?code=${code}`)
     .then(r => r.json())
     .then(data => {
+      if (data && data[0] && data[0].error) {
+        document.getElementById('research-tbody').innerHTML =
+          `<tr><td colspan="6" class="text-center text-danger py-3">${escHtml(data[0].error)}</td></tr>`;
+        return;
+      }
       _resData = data || [];
       _resPage = 1;
       renderResPage();
     })
     .catch(() => {
       document.getElementById('research-tbody').innerHTML =
-        '<tr><td colspan="6" class="text-center text-danger py-3">请求失败</td></tr>';
+        '<tr><td colspan="6" class="text-center text-danger py-3">加载失败</td></tr>';
     });
 }
 
@@ -311,18 +342,18 @@ function renderResPage() {
   const slice = _resData.slice(start, start + PAGE_SIZE);
   tbody.innerHTML = slice.map(d => {
     const link = d.url
-      ? `<a class="ann-link" href="${d.url}" target="_blank" rel="noopener">${d.title}</a>`
-      : `<span class="title-cell">${d.title}</span>`;
+      ? `<a class="ann-link" href="${escHtml(d.url)}" target="_blank" rel="noopener">${escHtml(d.title)}</a>`
+      : `<span class="title-cell">${escHtml(d.title)}</span>`;
     return `<tr>
-      <td class="num" style="white-space:nowrap">${d.code}</td>
-      <td style="white-space:nowrap">${d.stock_name}</td>
+      <td class="num" style="white-space:nowrap">${escHtml(d.code) || '—'}</td>
+      <td style="white-space:nowrap">${escHtml(d.stock_name) || '—'}</td>
       <td class="title-cell">${link}</td>
-      <td><span class="rating-badge ${ratingClass(d.rating)}">${d.rating || '—'}</span></td>
-      <td style="font-size:.76rem;color:var(--text2);white-space:nowrap">${d.institution}</td>
-      <td class="num" style="white-space:nowrap;color:var(--text2)">${d.date || '—'}</td>
+      <td><span class="rating-badge ${ratingClass(d.rating)}">${escHtml(d.rating) || '—'}</span></td>
+      <td style="font-size:.76rem;color:var(--text2);white-space:nowrap">${escHtml(d.institution) || '—'}</td>
+      <td class="num" style="white-space:nowrap;color:var(--text2)">${escHtml(d.date) || '—'}</td>
     </tr>`;
   }).join('');
-  renderPagination('res-pagination', _resPage, total, 'resGoPage');
+  renderPagination('res-pagination', _resPage, total, PAGE_SIZE, 'resGoPage');
 }
 
 // ── 初始化 ─────────────────────────────────────────────────────

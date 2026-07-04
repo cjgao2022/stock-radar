@@ -3,6 +3,7 @@
 from datetime import datetime, timezone, timedelta
 
 import akshare as ak
+import pandas as pd
 from data.fetchers import _AK_LOCK
 
 _CST = timezone(timedelta(hours=8))
@@ -24,7 +25,6 @@ def fetch_market_breadth() -> dict:
 
         pct   = df['涨跌幅']
         codes = df['代码'].astype(str) if '代码' in df.columns else df.iloc[:, 0].astype(str)
-        names = df['名称'].astype(str) if '名称' in df.columns else ''
 
         up   = int((pct > 0).sum())
         down = int((pct < 0).sum())
@@ -34,7 +34,12 @@ def fetch_market_breadth() -> dict:
         is_cyb = codes.str.startswith('300') | codes.str.startswith('301')
         is_bj  = codes.str.startswith('83') | codes.str.startswith('87') | codes.str.startswith('43')
         is_hi  = is_kc | is_cyb
-        is_st  = names.str.contains('ST', na=False) if isinstance(names, type(pct)) else False
+        if '名称' in df.columns:
+            is_st = df['名称'].astype(str).str.contains('ST', na=False)
+        else:
+            # 缺「名称」列时无法判断 ST，保持与 pct 等长的全 False，
+            # 避免 scalar False 参与 Series 布尔运算触发已弃用的 bool 按位取反行为
+            is_st = pd.Series(False, index=pct.index)
         is_main_nst = ~is_hi & ~is_bj & ~is_st
 
         zt = int((
@@ -70,8 +75,7 @@ def fetch_lhb_today(date_str: str = "") -> list[dict]:
     try:
         if not date_str:
             date_str = datetime.now(_CST).strftime('%Y%m%d')
-        with _AK_LOCK:
-            df = ak.stock_lhb_detail_em(start_date=date_str, end_date=date_str)
+        df = ak.stock_lhb_detail_em(start_date=date_str, end_date=date_str)
         if df is None or df.empty:
             return []
         target = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:]}"

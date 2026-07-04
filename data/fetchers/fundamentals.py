@@ -1,7 +1,6 @@
 """个股基本面数据：EPS、BVPS、ROE、净利润增速（THS 财务摘要）"""
 
 import akshare as ak
-from data.fetchers import _AK_LOCK
 
 
 def _parse_pct(s) -> float | None:
@@ -29,8 +28,7 @@ def fetch_stock_financials_history(code: str) -> dict:
     字段：periods/eps/roe/profit_yoy/rev_yoy
     """
     try:
-        with _AK_LOCK:
-            df = ak.stock_financial_abstract_ths(symbol=code, indicator='按报告期')
+        df = ak.stock_financial_abstract_ths(symbol=code, indicator='按报告期')
         if df is None or df.empty:
             return {"error": "no data"}
         recent = df.tail(8)
@@ -56,8 +54,7 @@ def fetch_stock_fundamental(code: str) -> dict:
     任一字段取不到时为 null，不影响其他字段返回。
     """
     try:
-        with _AK_LOCK:
-            df = ak.stock_financial_abstract_ths(symbol=code, indicator='按报告期')
+        df = ak.stock_financial_abstract_ths(symbol=code, indicator='按报告期')
         if df is None or df.empty:
             return {"error": "no data"}
 

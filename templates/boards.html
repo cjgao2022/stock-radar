@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% block title %}板块行情 - 股票雷达{% endblock %}
 {% block page_title %}板块行情{% endblock %}
-{% block page_subtitle %}概念与行业资金流向、涨跌排行{% endblock %}
 
 {% block head %}
 <style>
@@ -153,8 +152,10 @@
         </tbody>
       </table>
     </div>
+    <div id="board-pagination"></div>
   </div>
 </div>
+<script>window.__INITIAL_BOARDS__ = {{ initial_boards | tojson }};</script>
 {% endblock %}
 
 {% block scripts %}
@@ -162,6 +163,8 @@
 let allRows = [];
 let currentSort = { key:'change_pct', desc:true };
 let currentTab = 'concept';
+const BOARD_PAGE_SIZE = 30;
+let _boardPage = 1;
 
 function fmtPct(v){ if(v==null)return'-'; return(v>0?'+':'')+Number(v).toFixed(2)+'%'; }
 function fmtNet(v){ if(v==null)return'-'; return(v>=0?'+':'')+Number(v).toFixed(2)+'亿'; }
@@ -191,19 +194,31 @@ function updateOverview(rows) {
   document.getElementById('ov-tab-name').textContent = currentTab==='concept'?'概念板块':'行业板块';
 }
 
-function renderTable(rows) {
+function boardGoPage(p) {
+  _boardPage = p;
+  renderTable(allRows, false);
+  document.getElementById('board-table').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderTable(rows, resetPage = true) {
+  if (resetPage) _boardPage = 1;
   const q = document.getElementById('search-input').value.trim();
   const filtered = q ? rows.filter(r=>r.name&&r.name.includes(q)) : rows;
   const tbody = document.getElementById('board-tbody');
   if(!filtered.length){
-    tbody.innerHTML='<tr><td colspan="6" class="text-center text-muted py-4">暂无数据</td></tr>';return;
+    tbody.innerHTML='<tr><td colspan="6" class="text-center text-muted py-4">暂无数据</td></tr>';
+    document.getElementById('board-pagination').innerHTML = '';
+    return;
   }
+
+  const start = (_boardPage - 1) * BOARD_PAGE_SIZE;
+  const pageRows = filtered.slice(start, start + BOARD_PAGE_SIZE);
 
   const maxUp  = Math.max(...filtered.map(r=>r.up_count||0), 1);
   const maxDn  = Math.max(...filtered.map(r=>r.down_count||0), 1);
   const maxNet = Math.max(...filtered.map(r=>Math.abs(r.net||0)), 1);
 
-  tbody.innerHTML = filtered.map((d,i)=>{
+  tbody.innerHTML = pageRows.map((d,i)=>{
     const cls    = pctClass(d.change_pct);
     const netCls = d.net!=null ? pctClass(d.net) : 'flat';
     const upW    = d.up_count   ? Math.round(d.up_count/maxUp*50)    : 0;
@@ -212,7 +227,7 @@ function renderTable(rows) {
     const topChgCls = d.top_stock_chg!=null ? pctClass(d.top_stock_chg) : 'flat';
 
     return `<tr onclick="window.location='/boards/${currentTab}/${encodeURIComponent(d.name)}'">
-      <td class="num text-muted" style="font-size:.74rem;padding-left:14px">${i+1}</td>
+      <td class="num text-muted" style="font-size:.74rem;padding-left:14px">${start+i+1}</td>
       <td>
         <span class="fw-semibold" style="font-size:.9rem">${d.name||'-'}</span>
         ${d.company_count!=null?`<span class="text-muted ms-1 num" style="font-size:.7rem">${d.company_count}家</span>`:''}
@@ -245,6 +260,7 @@ function renderTable(rows) {
       </td>
     </tr>`;
   }).join('');
+  renderPagination('board-pagination', _boardPage, filtered.length, BOARD_PAGE_SIZE, 'boardGoPage');
 }
 
 function sortBy(key) {
@@ -259,17 +275,19 @@ function sortBy(key) {
 }
 function filterTable(){ renderTable(allRows); }
 
+function applyBoardsData(data) {
+  allRows = data.filter(d=>!d.error);
+  updateOverview(allRows);
+  document.getElementById('update-time').textContent = `共 ${allRows.length} 个`;
+  renderTable(allRows);
+}
+
 function loadBoards(type) {
   document.getElementById('board-tbody').innerHTML =
     '<tr><td colspan="6" class="text-center text-muted py-5">加载中，约需 15 秒...</td></tr>';
-  fetch(`/api/boards?board_type=${type}&sort=change_pct&order=desc`).then(r=>r.json()).then(data=>{
-    allRows = data.filter(d=>!d.error);
-    updateOverview(allRows);
-    document.getElementById('update-time').textContent = `共 ${allRows.length} 个`;
-    renderTable(allRows);
-  }).catch(()=>{
+  fetch(`/api/boards?board_type=${type}&sort=change_pct&order=desc`).then(r=>r.json()).then(applyBoardsData).catch(()=>{
     document.getElementById('board-tbody').innerHTML =
-      '<tr><td colspan="6" class="text-center text-danger py-3">加载失败，请刷新</td></tr>';
+      '<tr><td colspan="6" class="text-center text-danger py-3">加载失败</td></tr>';
   });
 }
 
@@ -282,7 +300,12 @@ function switchTab(type, btn) {
   loadBoards(type);
 }
 
-loadBoards('concept');
+// 服务端已直出默认概念板块视图时跳过首次请求，避免闪烁
+if (window.__INITIAL_BOARDS__ && window.__INITIAL_BOARDS__.length) {
+  applyBoardsData(window.__INITIAL_BOARDS__);
+} else {
+  loadBoards('concept');
+}
 
 // ── 行业轮动 ────────────────────────────────────────────────
 let _rotData=[], _rotSort={key:'d20',desc:true};
@@ -307,8 +330,8 @@ function renderRotation(){
       const cls=v>0?'up':v<0?'down':'flat';
       return `<td class="text-end num ${cls}" style="font-size:.82rem;font-weight:700">${v>0?'+':''}${v.toFixed(2)}%</td>`;
     }
-    return `<tr style="cursor:pointer" onclick="switchTab('industry');document.getElementById('search-input').value='${r.name.replace(/'/g,'')}'">
-      <td class="fw-semibold" style="font-size:.84rem">${r.name}</td>
+    return `<tr style="cursor:pointer" onclick="switchTab('industry');document.getElementById('search-input').value='${escJsAttr(r.name)}'">
+      <td class="fw-semibold" style="font-size:.84rem">${escHtml(r.name)}</td>
       ${cell(r.d5)}${cell(r.d20)}${cell(r.d60)}
       <td class="text-end text-muted" style="font-size:.72rem">${r.days}天</td>
     </tr>`;

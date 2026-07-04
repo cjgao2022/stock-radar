@@ -1,9 +1,13 @@
 """APScheduler 盘后任务：16:35 刷新板块日快照"""
 
+import logging
 from datetime import datetime, timezone, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from pathlib import Path
 import yaml
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
+logger = logging.getLogger("scheduler")
 
 _cfg = yaml.safe_load(Path("config.yaml").read_text(encoding="utf-8"))
 _BEIJING = timezone(timedelta(hours=8))
@@ -21,10 +25,13 @@ def refresh_board_snapshots() -> None:
     for btype in ("concept", "industry"):
         rows = fetch_board_list(btype)
         if rows and "error" not in rows[0]:
-            save_board_snapshot(date, btype, rows)
-            print(f"[scheduler] {date} {btype} 板块快照已刷新，共 {len(rows)} 条")
+            try:
+                save_board_snapshot(date, btype, rows)
+                logger.info(f"{date} {btype} 板块快照已刷新，共 {len(rows)} 条")
+            except Exception as exc:
+                logger.warning(f"{date} {btype} 板块快照写库失败: {exc}")
         else:
-            print(f"[scheduler] {date} {btype} 板块快照刷新失败: {rows}")
+            logger.warning(f"{date} {btype} 板块快照刷新失败: {rows}")
 
 
 def save_breadth_snapshot() -> None:
@@ -44,9 +51,9 @@ def save_breadth_snapshot() -> None:
                 and (d.get("amount") or 0) > 0
             ) or None
         save_breadth_history(date, {**data, "amount": amount})
-        print(f"[scheduler] {date} 市场情绪快照已保存 up={data.get('up')} down={data.get('down')} amount={amount}")
+        logger.info(f"{date} 市场情绪快照已保存 up={data.get('up')} down={data.get('down')} amount={amount}")
     else:
-        print(f"[scheduler] {date} 市场情绪快照失败: {data}")
+        logger.warning(f"{date} 市场情绪快照失败: {data}")
 
 
 def save_zt_snapshot() -> None:
@@ -69,9 +76,9 @@ def save_zt_snapshot() -> None:
             for r in rows
         ]
         save_zt_history(date, normalized)
-        print(f"[scheduler] {date} 涨停板快照已保存，共 {len(normalized)} 条")
+        logger.info(f"{date} 涨停板快照已保存，共 {len(normalized)} 条")
     else:
-        print(f"[scheduler] {date} 涨停板快照失败: {rows[:1] if rows else 'empty'}")
+        logger.warning(f"{date} 涨停板快照失败: {rows[:1] if rows else 'empty'}")
 
 
 def save_lhb_snapshot() -> None:
@@ -95,9 +102,9 @@ def save_lhb_snapshot() -> None:
             for r in rows
         ]
         save_lhb_history(date, normalized)
-        print(f"[scheduler] {date} 龙虎榜快照已保存，共 {len(normalized)} 条")
+        logger.info(f"{date} 龙虎榜快照已保存，共 {len(normalized)} 条")
     else:
-        print(f"[scheduler] {date} 龙虎榜快照失败: {rows[:1] if rows else 'empty'}")
+        logger.warning(f"{date} 龙虎榜快照失败: {rows[:1] if rows else 'empty'}")
 
 
 def bootstrap_breadth_history(days: int = 60) -> dict:
@@ -141,15 +148,13 @@ def bootstrap_breadth_history(days: int = 60) -> dict:
 
         if need_zt:
             try:
-                from data.fetchers import _AK_LOCK
                 zt_rows = fetch_zt_pool(date_key)
                 zt_count = len(zt_rows) if (zt_rows and "error" not in zt_rows[0]) else 0
 
                 # DT 接口仅支持最近30个交易日，超出范围单独容错
                 dt_count = 0
                 try:
-                    with _AK_LOCK:
-                        dt_df = ak.stock_zt_pool_dtgc_em(date=date_key)
+                    dt_df = ak.stock_zt_pool_dtgc_em(date=date_key)
                     dt_count = len(dt_df) if dt_df is not None and not dt_df.empty else 0
                 except Exception:
                     pass  # 超出范围或无数据，dt_count 保持 0
@@ -175,7 +180,7 @@ def bootstrap_breadth_history(days: int = 60) -> dict:
                     save_zt_history(date_str, normalized)
                 stats["zt_saved"] += 1
             except Exception as exc:
-                print(f"[bootstrap] ZT {date_str} 失败: {exc}")
+                logger.warning(f"[bootstrap] ZT {date_str} 失败: {exc}")
 
         if need_lhb:
             try:
@@ -197,9 +202,9 @@ def bootstrap_breadth_history(days: int = 60) -> dict:
                     save_lhb_history(date_str, normalized)
                     stats["lhb_saved"] += 1
             except Exception as exc:
-                print(f"[bootstrap] LHB {date_str} 失败: {exc}")
+                logger.warning(f"[bootstrap] LHB {date_str} 失败: {exc}")
 
-    print(f"[bootstrap] 完成: {stats}")
+    logger.info(f"[bootstrap] 完成: {stats}")
     return stats
 
 
@@ -208,7 +213,7 @@ def start_scheduler() -> None:
     hour, minute = map(int, refresh_time.split(":"))
 
     def _offset(base_h, base_m, delta):
-        total = base_h * 60 + base_m + delta
+        total = (base_h * 60 + base_m + delta) % 1440  # 跨午夜环绕，避免 hour=24 非法值
         return divmod(total, 60)
 
     h2, m2 = _offset(hour, minute, 2)
@@ -229,4 +234,4 @@ def start_scheduler() -> None:
                       day_of_week="mon-fri", hour=h4, minute=m4,
                       id="lhb_snapshot")
     scheduler.start()
-    print(f"[scheduler] 已启动，盘后快照将在工作日 {refresh_time}（北京时间）自动刷新")
+    logger.info(f"已启动，盘后快照将在工作日 {refresh_time}（北京时间）自动刷新")

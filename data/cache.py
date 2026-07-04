@@ -1,7 +1,9 @@
 """SQLite 日快照 + 内存 TTL 缓存"""
 
 import sqlite3
+import threading
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Callable
 
@@ -11,21 +13,51 @@ _cfg = yaml.safe_load(Path("config.yaml").read_text(encoding="utf-8"))
 _DB_PATH = Path(_cfg["cache"]["db_path"])
 
 _mem: dict[str, tuple[Any, float]] = {}
+_key_locks: dict[str, threading.Lock] = {}
+_key_locks_guard = threading.Lock()
+
+
+def _lock_for(key: str) -> threading.Lock:
+    with _key_locks_guard:
+        lock = _key_locks.get(key)
+        if lock is None:
+            lock = threading.Lock()
+            _key_locks[key] = lock
+        return lock
 
 
 def get_cached(key: str, ttl_seconds: int, fetch_fn: Callable) -> Any:
     now = time.time()
     if key in _mem and _mem[key][1] > now:
         return _mem[key][0]
-    data = fetch_fn()
-    if not (isinstance(data, list) and data and "error" in data[0]):
-        _mem[key] = (data, now + ttl_seconds)
-    return data
+    # single-flight：同一 key 并发首访时只有一个线程真正调用 fetch_fn，
+    # 其余线程排队等待后直接复用结果，避免同时打 N 次上游
+    with _lock_for(key):
+        now = time.time()
+        if key in _mem and _mem[key][1] > now:
+            return _mem[key][0]
+        data = fetch_fn()
+        is_error = (isinstance(data, list) and data and "error" in data[0]) or (
+            isinstance(data, dict) and "error" in data
+        )
+        if not is_error:
+            _mem[key] = (data, now + ttl_seconds)
+        return data
 
 
-def _conn() -> sqlite3.Connection:
+@contextmanager
+def _conn():
+    """连接用完即关；busy_timeout=10s 让并发写入排队重试而非立即报 database is locked。"""
     _DB_PATH.parent.mkdir(exist_ok=True)
-    return sqlite3.connect(_DB_PATH)
+    conn = sqlite3.connect(_DB_PATH, timeout=10)
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def init_db() -> None:
@@ -45,6 +77,8 @@ def init_db() -> None:
                 top_stock_chg REAL,
                 PRIMARY KEY (date, board_type, code)
             );
+            CREATE INDEX IF NOT EXISTS idx_board_snapshot_type_date
+                ON board_snapshot (board_type, date);
             CREATE TABLE IF NOT EXISTS index_snapshot (
                 date TEXT NOT NULL,
                 code TEXT NOT NULL,
@@ -106,6 +140,15 @@ def init_db() -> None:
 
 
 def save_board_snapshot(date: str, board_type: str, rows: list[dict]) -> None:
+    fields = ("code", "name", "change_pct", "mkt_cap", "turnover_rate",
+              "up_count", "down_count", "top_stock", "top_stock_chg")
+    normalized = []
+    for r in rows:
+        row = {f: r.get(f) for f in fields}
+        row["code"] = row["code"] or row["name"]
+        row["date"] = date
+        row["board_type"] = board_type
+        normalized.append(row)
     with _conn() as c:
         c.executemany(
             """INSERT OR REPLACE INTO board_snapshot
@@ -113,7 +156,7 @@ def save_board_snapshot(date: str, board_type: str, rows: list[dict]) -> None:
                 up_count, down_count, top_stock, top_stock_chg)
                VALUES (:date, :board_type, :code, :name, :change_pct, :mkt_cap,
                        :turnover_rate, :up_count, :down_count, :top_stock, :top_stock_chg)""",
-            [{**r, "date": date, "board_type": board_type} for r in rows],
+            normalized,
         )
 
 
@@ -230,12 +273,17 @@ def load_lhb_history(date: str) -> list[dict]:
 
 
 def load_board_rotation(board_type: str = "industry") -> list[dict]:
-    """从 board_snapshot 计算各板块多周期累计涨跌幅（5/20/60 日）。"""
+    """从 board_snapshot 计算各板块多周期累计涨跌幅（5/20/60 日）。
+    最长窗口是60个交易日，取近120个自然日兜底（覆盖春节等长假），
+    避免快照累积后每次都全表扫描。
+    """
+    from datetime import datetime, timedelta
+    cutoff = (datetime.now() - timedelta(days=120)).strftime("%Y-%m-%d")
     with _conn() as c:
         c.row_factory = sqlite3.Row
         rows = c.execute(
-            "SELECT name, date, change_pct FROM board_snapshot WHERE board_type=? ORDER BY name, date ASC",
-            (board_type,),
+            "SELECT name, date, change_pct FROM board_snapshot WHERE board_type=? AND date>=? ORDER BY name, date ASC",
+            (board_type, cutoff),
         ).fetchall()
 
     boards: dict[str, dict] = {}

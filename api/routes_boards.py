@@ -1,20 +1,18 @@
 """板块相关 API"""
 
-from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter
+from api import today_cst as _today, config as _cfg
 from data.fetchers.boards import fetch_board_list, fetch_board_constituents, fetch_board_kline
 from data.cache import get_cached, load_board_snapshot, save_board_constituents, load_board_constituents, load_board_rotation
-from pathlib import Path
-import yaml
 
 router = APIRouter(prefix="/api/boards")
-_cfg = yaml.safe_load(Path("config.yaml").read_text(encoding="utf-8"))
-_BEIJING = timezone(timedelta(hours=8))
 _TTL = _cfg["cache"]["board_ttl_minutes"] * 60
+_LONG_KLINE_TTL = _cfg["cache"]["board_kline_long_ttl_seconds"]
 
-
-def _today() -> str:
-    return datetime.now(_BEIJING).strftime("%Y-%m-%d")
+_SORT_WHITELIST = {
+    "name", "change_pct", "mkt_cap", "net", "up_count", "down_count",
+    "top_stock_chg", "company_count", "turnover_rate",
+}
 
 
 @router.get("")
@@ -23,11 +21,12 @@ def api_board_list(board_type: str = "concept", sort: str = "change_pct", order:
     # 优先读 SQLite 日快照，无快照再实时拉
     rows = load_board_snapshot(date, board_type)
     if not rows or "error" in rows[0]:
-        rows = get_cached(f"board_{board_type}", _TTL, lambda: fetch_board_list(board_type))
+        rows = get_cached(f"board_{board_type}_{date}", _TTL, lambda: fetch_board_list(board_type))
 
+    sort_key = sort if sort in _SORT_WHITELIST else "change_pct"
     reverse = order == "desc"
     try:
-        rows = sorted(rows, key=lambda r: (r.get(sort) or 0), reverse=reverse)
+        rows = sorted(rows, key=lambda r: (r.get(sort_key) or 0), reverse=reverse)
     except Exception:
         pass
     return rows
@@ -44,7 +43,7 @@ def api_board_kline(board_type: str, board_name: str, days: int = 30, period: st
     date = _today()
     if period in ("monthly", "yearly"):
         key = f"kline_{board_type}_{board_name}_{period}_{date}"
-        ttl = 3600
+        ttl = _LONG_KLINE_TTL
     else:
         key = f"kline_{board_type}_{board_name}_{days}_{date}"
         ttl = _TTL

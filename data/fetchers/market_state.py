@@ -68,8 +68,7 @@ def fetch_market_valuation() -> dict:
         bond_yield: float | None = None
         bond_series: dict = {}
         try:
-            with _AK_LOCK:
-                bond_raw = ak.bond_zh_us_rate(start_date=start_dt)
+            bond_raw = ak.bond_zh_us_rate(start_date=start_dt)
             bond_df = bond_raw[['日期', '中国国债收益率10年']].copy()
             bond_df.columns = ['date', 'yield']
             bond_df['yield'] = pd.to_numeric(bond_df['yield'], errors='coerce')
@@ -106,8 +105,7 @@ def fetch_market_valuation() -> dict:
         # ── 全A 股息率 + 近5年分位（乐咕乐股，独立 try 不影响 PE/ERP） ──
         dividend = dividend_5y_pct = None
         try:
-            with _AK_LOCK:
-                dv_raw = ak.stock_a_gxl_lg(symbol='上证A股')
+            dv_raw = ak.stock_a_gxl_lg(symbol='上证A股')
             dv_df = dv_raw[['日期', '股息率']].copy()
             dv_df.columns = ['date', 'dv']
             dv_df['dv'] = pd.to_numeric(dv_df['dv'], errors='coerce')
@@ -170,8 +168,7 @@ def fetch_margin_trend() -> dict:
         import akshare as ak
         import pandas as pd
 
-        with _AK_LOCK:
-            df = ak.stock_margin_account_info()
+        df = ak.stock_margin_account_info()
 
         df = df.rename(columns={'日期': 'date', '融资余额': 'balance', '融资买入额': 'buy'})
         df['date'] = pd.to_datetime(df['date'])

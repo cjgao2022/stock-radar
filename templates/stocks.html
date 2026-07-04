@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% block title %}个股行情 - 股票雷达{% endblock %}
 {% block page_title %}个股持仓{% endblock %}
-{% block page_subtitle %}持仓行情、盈亏与主力资金{% endblock %}
 
 {% block head %}
 <style>
@@ -263,7 +262,7 @@
 .btn-add.in-wl:hover { background:transparent;color:var(--up); }
 </style>
 <script>
-let allData=[], maxAmount=1, watchlistCodes=new Set();
+let allData=[], watchlistCodes=new Set();
 let volStats={};       // {code: {ratio, avg_vol}}
 let fundData={};       // {code: {eps, bvps, roe, profit_yoy}}
 let flowData=[];       // 主力资金数据
@@ -292,7 +291,6 @@ function fmtMoney(v){
 }
 function pctClass(v){ return v>0?'up':v<0?'down':'flat'; }
 function now(){ return new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Asia/Shanghai'}); }
-function escQ(s){ return s.replace(/'/g,"\\'"); }
 
 /* ── 成本编辑 ── */
 function openCostEditor(code, name, costPrice, shares){
@@ -395,7 +393,7 @@ function stockRow(d){
     }
     pnlHtml+=`<div class="cost-sub">成本 ${Number(d.cost_price).toFixed(2)}</div>`;
   } else {
-    pnlHtml=`<span class="pnl-na" onclick="openCostEditor('${d.code}','${escQ(d.name||d.code)}',null,null)">设成本</span>`;
+    pnlHtml=`<span class="pnl-na" onclick="openCostEditor('${escJsAttr(d.code)}','${escJsAttr(d.name||d.code)}',null,null)">设成本</span>`;
   }
 
   // PE / PB / ROE
@@ -434,9 +432,9 @@ function stockRow(d){
     <td class="text-end">${pyHtml}</td>
     <td class="text-end">${pnlHtml}</td>
     <td class="text-center" style="white-space:nowrap">
-      <button class="btn-kline" onclick="openKlineModal('${d.code}','${escQ(d.name||d.code)}',false)" title="K线">K线</button>
-      <button class="btn-cost" onclick="openCostEditor('${d.code}','${escQ(d.name||d.code)}',${d.cost_price??'null'},${d.shares??'null'})" title="设置成本">✏</button>
-      <button class="btn-rm" onclick="removeStock('${d.code}',this)" title="移除持仓">×</button>
+      <button class="btn-kline" onclick="openKlineModal('${escJsAttr(d.code)}','${escJsAttr(d.name||d.code)}',false)" title="K线">K线</button>
+      <button class="btn-cost" onclick="openCostEditor('${escJsAttr(d.code)}','${escJsAttr(d.name||d.code)}',${d.cost_price??'null'},${d.shares??'null'})" title="设置成本">✏</button>
+      <button class="btn-rm" onclick="removeStock('${escJsAttr(d.code)}',this)" title="移除持仓">×</button>
     </td>
   </tr>`;
 }
@@ -450,8 +448,8 @@ function getSortVal(d,key){
   if(key==='change_abs')return d.price!=null&&d.prev_close!=null?d.price-d.prev_close:-Infinity;
   if(key==='vol_ratio')return volStats[d.code]?.ratio??-1;
   if(key==='pnl_pct'){const p=calcPnl(d);return p!=null?p.pct:-Infinity;}
-  if(key==='pe'){const f=fundData[d.code];return(f?.eps&&d.price)?d.price/f.eps:Infinity;}
-  if(key==='pb'){const f=fundData[d.code];return(f?.bvps&&d.price)?d.price/f.bvps:Infinity;}
+  if(key==='pe'){const f=fundData[d.code];return(f?.eps&&d.price)?d.price/f.eps:-Infinity;}
+  if(key==='pb'){const f=fundData[d.code];return(f?.bvps&&d.price)?d.price/f.bvps:-Infinity;}
   if(key==='roe')return fundData[d.code]?.roe??-Infinity;
   if(key==='profit_yoy')return fundData[d.code]?.profit_yoy??-Infinity;
   return d[key]??-Infinity;
@@ -574,12 +572,11 @@ function loadStocks(){
   fetch('/api/stocks/watchlist').then(r=>r.json()).then(data=>{
     allData=data.filter(d=>!d.error);
     watchlistCodes=new Set(allData.map(d=>d.code));
-    maxAmount=Math.max(...allData.map(d=>d.amount||0),1);
     updateStats(allData);updatePortfolioPanel(allData);renderTable();
     document.getElementById('refresh-hint').textContent=`更新于 ${now()}`;
     loadFundamentals();
   }).catch(()=>{
-    document.getElementById('stock-tbody').innerHTML='<tr><td colspan="14" class="text-center text-danger py-3">加载失败，请刷新</td></tr>';
+    document.getElementById('stock-tbody').innerHTML='<tr><td colspan="14" class="text-center text-danger py-3">加载失败</td></tr>';
   });
 }
 loadStocks();
@@ -655,7 +652,7 @@ document.getElementById('search-input').addEventListener('keydown',e=>{if(e.key=
 function addBtn(code, name){
   return watchlistCodes.has(code)
     ?`<button class="btn-add in-wl" disabled>✓ 已持仓</button>`
-    :`<button class="btn-add" onclick="addStock('${code}','${escQ(name)}',this)">＋ 加入持仓</button>`;
+    :`<button class="btn-add" onclick="addStock('${escJsAttr(code)}','${escJsAttr(name)}',this)">＋ 加入持仓</button>`;
 }
 
 function renderDetailCard(d){
@@ -751,6 +748,8 @@ function doSearch(){
     const valid=data.filter(d=>!d.error);
     if(!valid.length){el.innerHTML='<div class="text-muted small py-2">未找到该股票</div>';return;}
     el.innerHTML=valid.length===1?renderDetailCard(valid[0]):renderResultList(valid,2);
+  }).catch(()=>{
+    el.innerHTML='<div class="text-muted small py-2">查询失败</div>';
   });
 }
 </script>

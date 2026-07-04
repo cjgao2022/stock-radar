@@ -3,6 +3,7 @@
 from pathlib import Path
 import requests
 import yaml
+from data.fetchers import parse_sina_hq_line
 
 _cfg = yaml.safe_load(Path("config.yaml").read_text(encoding="utf-8"))
 _INDEX_MAP = {item["code"]: item["name"] for item in _cfg["indices"]}
@@ -19,13 +20,10 @@ def fetch_indices() -> list[dict]:
 
     result = []
     for line in r.text.strip().split("\n"):
-        if "=" not in line or '""' in line:
+        parsed = parse_sina_hq_line(line)
+        if parsed is None:
             continue
-        raw_code = line.split("=")[0].split("_")[-1]
-        val = line.split('"')[1]
-        fields = val.split(",")
-        if len(fields) < 10:
-            continue
+        raw_code, fields = parsed
         try:
             open_p = float(fields[1]) if fields[1] else 0
             prev = float(fields[2]) if fields[2] else 0

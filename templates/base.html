@@ -4,6 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}股票雷达{% endblock %}</title>
+  <script>
+    // 首屏前同步设置主题，避免先按亮色渲染再闪烁切到暗色（FOUC）
+    document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'dark');
+  </script>
   <link href="/static/vendor/bootstrap.min.css" rel="stylesheet">
   <script src="/static/vendor/echarts.min.js"></script>
   <style>
@@ -183,14 +187,43 @@
       width: 4px; height: 22px; border-radius: 2px;
       background: linear-gradient(180deg, var(--accent) 0%, #7ab3f8 100%);
     }
-    .page-head .ph-sub {
-      margin: var(--sp-1) 0 0 calc(4px + var(--sp-2));
-      font-size: var(--fs-sm); color: var(--text3);
-    }
-    .page-head .ph-sub:empty { display: none; }
     .page-head .ph-meta {
       font-size: var(--fs-xs); color: var(--text3); font-variant-numeric: tabular-nums;
     }
+
+    /* ── 通用骨架屏（慢接口加载态，贴合最终布局的占位块 + 微光扫过） ── */
+    .skeleton {
+      display: inline-block;
+      background: linear-gradient(90deg, var(--border) 25%, var(--border2) 37%, var(--border) 63%);
+      background-size: 400% 100%;
+      animation: skeleton-shimmer 1.4s ease infinite;
+      border-radius: 4px;
+      vertical-align: middle;
+    }
+    @keyframes skeleton-shimmer {
+      0% { background-position: 100% 50%; }
+      100% { background-position: 0 50%; }
+    }
+    .skeleton-hint {
+      font-size: var(--fs-xs); color: var(--text3); text-align: center;
+      padding: 10px 0 2px;
+    }
+
+    /* ── 通用分页 ── */
+    .pg-bar {
+      display:flex; align-items:center; gap:8px;
+      padding:8px 12px; font-size:.78rem; color:var(--text2);
+      border-top:1px solid var(--border);
+    }
+    .pg-btn {
+      width:28px; height:28px; border-radius:6px; border:1px solid var(--border2);
+      background:transparent; color:var(--text1); cursor:pointer; font-size:.9rem;
+      display:flex; align-items:center; justify-content:center; transition:all .12s;
+    }
+    .pg-btn:hover:not(:disabled) { border-color:var(--accent); color:var(--accent); }
+    .pg-btn:disabled { opacity:.35; cursor:not-allowed; }
+    .pg-info { font-variant-numeric:tabular-nums; }
+    .pg-total { margin-left:4px; color:var(--text3); font-size:.72rem; }
 
     /* ── 通用卡片 ── */
     .panel {
@@ -514,10 +547,7 @@
 <div class="main-wrap">
   {% block page_head %}
   <div class="page-head">
-    <div>
-      <h1 class="ph-title"><span class="ph-bar"></span>{% block page_title %}{% endblock %}</h1>
-      <div class="ph-sub">{% block page_subtitle %}{% endblock %}</div>
-    </div>
+    <h1 class="ph-title"><span class="ph-bar"></span>{% block page_title %}{% endblock %}</h1>
     <div class="ph-meta">{% block page_meta %}{% endblock %}</div>
   </div>
   {% endblock %}
@@ -527,9 +557,11 @@
 <script src="/static/vendor/bootstrap.bundle.min.js"></script>
 <script>
 // ── 主题管理 ──
+// data-theme 属性已在 <head> 内联脚本里提前设置（避免 FOUC），这里只需把按钮图标同步成当前主题
 (function() {
   const saved = localStorage.getItem('theme') || 'dark';
-  applyTheme(saved, false);
+  const btn = document.getElementById('theme-btn');
+  if (btn) btn.textContent = saved === 'dark' ? '☀️' : '🌙';
 })();
 
 function applyTheme(theme, save) {
@@ -544,6 +576,36 @@ function toggleTheme() {
   applyTheme(current === 'dark' ? 'light' : 'dark', true);
 }
 
+// ── 通用分页渲染：containerId 内插入分页条，onPageFn 是页面里定义的翻页函数名 ──
+function renderPagination(containerId, page, total, pageSize, onPageFn) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const totalPages = Math.ceil(total / pageSize);
+  if (totalPages <= 1) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="pg-bar">
+    <button class="pg-btn" onclick="${onPageFn}(${page - 1})" ${page <= 1 ? 'disabled' : ''}>‹</button>
+    <span class="pg-info">第 ${page} / ${totalPages} 页</span>
+    <button class="pg-btn" onclick="${onPageFn}(${page + 1})" ${page >= totalPages ? 'disabled' : ''}>›</button>
+    <span class="pg-total">共 ${total} 条</span>
+  </div>`;
+}
+
+// ── HTML 转义（第三方数据拼 innerHTML 前必须调用） ──
+function escHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
+// ── 转义后可安全塞进 onclick="fn('...')" 的单引号JS字符串参数 ──
+// 注意：escHtml 把 ' 转成 &#39; 在这里不够用——浏览器先做 HTML 实体解码再交给 JS 解析，
+// &#39; 解码回 ' 后照样能提前闭合 JS 字符串；这里对 ' 用 JS 转义 \'，对 " 才用 HTML 实体 &quot;
+function escJsAttr(s) {
+  return String(s ?? '').replace(/[\\'"&<>]/g, c => ({
+    '\\': '\\\\', "'": "\\'", '"': '&quot;', '&': '&amp;', '<': '&lt;', '>': '&gt;',
+  }[c]));
+}
+
 // ── 高亮当前导航 ──
 (function() {
   const path = location.pathname;
@@ -555,9 +617,9 @@ function toggleTheme() {
 // ── 实时时钟 + 市场状态 ──
 function updateClock() {
   const now = new Date();
-  document.getElementById('market-time').textContent =
-    now.toLocaleString('sv-SE', { timeZone: 'Asia/Shanghai' });
-  const h = now.getHours(), m = now.getMinutes();
+  const cst = now.toLocaleString('sv-SE', { timeZone: 'Asia/Shanghai' });
+  document.getElementById('market-time').textContent = cst;
+  const [h, m] = cst.slice(11).split(':').map(Number);
   const inSession = (h > 9 || (h === 9 && m >= 25)) && (h < 15 || (h === 15 && m === 0));
   const dot = document.getElementById('status-dot');
   if (dot) {

@@ -45,6 +45,22 @@ cache:
   flow_ttl_minutes: 5
   snapshot_refresh_time: "16:35"
   db_path: "db/snapshot.db"
+  # 以下 TTL 原先是散落各路由文件的魔法数字，统一收拢到这里（单位：秒）
+  indices_ttl_seconds: 60             # 指数实时行情
+  market_breadth_ttl_seconds: 300     # 市场情绪（全量拉取~20s，5分钟缓存）
+  vol_stats_ttl_seconds: 300          # 自选股/ETF 量比统计
+  flow_rank_ttl_seconds: 300          # 自选股主力资金排行
+  leaders_ttl_seconds: 1800           # 行业龙头（一/二级）
+  etf_meta_ttl_seconds: 1800          # ETF 规模/折溢价
+  announcements_ttl_seconds: 1800     # A股公告
+  research_ttl_seconds: 3600          # 个股研报
+  industry_pe_ttl_seconds: 3600       # 行业估值 PE（巨潮）
+  board_kline_long_ttl_seconds: 3600  # 板块月K/年K（resample结果变化慢）
+  macro_valuation_ttl_seconds: 3600   # 市场估值温度
+  margin_ttl_seconds: 3600            # 两融余额趋势
+  fundamentals_ttl_seconds: 21600     # 个股基本面/财务/估值分位（6小时）
+  macro_indicators_ttl_seconds: 86400 # 宏观指标 CPI/PPI/PMI/M2（24小时）
+  macro_calendar_ttl_seconds: 86400   # 宏观发布日历（24小时）
 
 server:
   host: "127.0.0.1"

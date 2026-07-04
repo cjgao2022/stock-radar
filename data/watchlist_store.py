@@ -4,7 +4,9 @@
 """
 
 import json
+import os
 import threading
+import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 import yaml
@@ -22,9 +24,11 @@ def _load() -> dict:
     if _PATH.exists():
         try:
             return json.loads(_PATH.read_text(encoding="utf-8"))
-        except Exception:
-            pass
-    # 首次：从 config.yaml 迁移
+        except Exception as e:
+            backup_path = _PATH.with_suffix(f".json.corrupt-{int(time.time())}")
+            _PATH.rename(backup_path)
+            print(f"[watchlist] {_PATH} 解析失败已备份至 {backup_path}: {e}")
+    # 首次（或解析失败后）：从 config.yaml 迁移
     cfg = yaml.safe_load(Path("config.yaml").read_text(encoding="utf-8"))
     data = {
         "stocks": [
@@ -41,7 +45,9 @@ def _load() -> dict:
 
 
 def _save(data: dict):
-    _PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp_path = _PATH.with_suffix(".json.tmp")
+    tmp_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp_path, _PATH)
 
 
 # ── 个股 ──────────────────────────────────────────────────────────

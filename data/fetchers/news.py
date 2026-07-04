@@ -2,7 +2,6 @@
 
 import akshare as ak
 from datetime import datetime, timezone, timedelta
-from data.fetchers import _AK_LOCK
 import data.watchlist_store as ws
 
 _CST = timezone(timedelta(hours=8))
@@ -37,18 +36,28 @@ def fetch_announcements_watchlist() -> list[dict]:
         return []
 
     results = []
-    for code in codes[:20]:
+    failures = []
+    targets = codes[:20]
+    for code in targets:
         try:
-            with _AK_LOCK:
-                df = ak.stock_individual_notice_report(
-                    security=code, symbol="全部",
-                    begin_date=today, end_date=today,
-                )
+            df = ak.stock_individual_notice_report(
+                security=code, symbol="全部",
+                begin_date=today, end_date=today,
+            )
             if df is None or df.empty:
                 continue
             results.extend(_df_to_ann(df, code))
-        except Exception:
+        except KeyError:
+            # AKShare 在查询结果为0条时内部访问 df["代码"] 必抛 KeyError（已读源码确认，
+            # big_df 为空 DataFrame 时该列从未被赋值），这是"真无公告"的正常路径，非故障
             continue
+        except Exception as e:
+            failures.append(str(e))
+
+    # 全部持仓股都请求失败（非 KeyError）视为瞬时故障，返回 error 而非空列表，
+    # 避免被 get_cached 当作"今日确实无公告"缓存 30 分钟
+    if failures and len(failures) == len(targets):
+        return [{"error": failures[0]}]
 
     results.sort(key=lambda x: x.get("date", ""), reverse=True)
     return results[:100]
@@ -60,8 +69,11 @@ def fetch_announcements_market() -> list[dict]:
     """
     today = _today_str()
     try:
-        with _AK_LOCK:
-            df = ak.stock_notice_report(symbol="全部", date=today)
+        df = ak.stock_notice_report(symbol="全部", date=today)
+    except KeyError:
+        # 同 fetch_announcements_watchlist：结果为0条时 AKShare 内部必抛 KeyError('代码')，
+        # 全市场场景概率极低但保持口径一致，视为真无公告
+        return []
     except Exception as e:
         return [{"error": str(e)}]
 
@@ -81,10 +93,10 @@ def fetch_research_reports(code: str = "") -> list[dict]:
     targets = [code] if code else [s["code"] for s in ws.get_stocks()]
 
     results = []
+    failures = []
     for c in targets:
         try:
-            with _AK_LOCK:
-                df = ak.stock_research_report_em(symbol=c)
+            df = ak.stock_research_report_em(symbol=c)
             if df is None or df.empty:
                 continue
             limit = None if code else 20
@@ -101,8 +113,17 @@ def fetch_research_reports(code: str = "") -> list[dict]:
                     "date":        str(row.get("日期", ""))[:10],
                     "url":         str(row.get("报告PDF链接", "")),
                 })
-        except Exception:
+        except KeyError:
+            # 同 fetch_announcements_watchlist：该股研报数为0时 AKShare 内部列选择必抛
+            # KeyError，是"真无研报"的正常路径，非故障
             continue
+        except Exception as e:
+            failures.append(str(e))
+
+    # 全部目标都请求失败（非 KeyError）视为瞬时故障，返回 error 而非空列表，
+    # 避免被 get_cached 当作"确实无研报"缓存 1 小时
+    if failures and len(failures) == len(targets):
+        return [{"error": failures[0]}]
 
     results.sort(key=lambda x: x.get("date", ""), reverse=True)
     return results[:60] if not code else results

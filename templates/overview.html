@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% block title %}大盘概览 - 股票雷达{% endblock %}
 {% block page_title %}大盘概览{% endblock %}
-{% block page_subtitle %}指数、市场情绪、板块与资金全景{% endblock %}
 
 {% block head %}
 <style>
@@ -128,6 +127,7 @@
   </div>
   {% endfor %}
 </div>
+<script>window.__INITIAL_INDICES__ = {{ initial_indices | tojson }};</script>
 
 <!-- ② 市场情绪 + 历史图 -->
 <div class="panel mb-3">
@@ -135,7 +135,7 @@
     <div class="hd-title"><div class="accent-bar"></div>市场情绪</div>
     <div class="d-flex align-items-center gap-2">
       <span id="breadth-hist-note" style="font-size:.68rem;color:var(--text3)">涨停折线 / 涨跌柱</span>
-      <button id="bootstrap-btn" onclick="runBootstrap()" style="font-size:.68rem;padding:2px 8px;border-radius:5px;border:1px solid rgba(61,126,252,.4);background:transparent;color:rgba(61,126,252,.8);cursor:pointer;white-space:nowrap">补齐历史</button>
+      <button id="bootstrap-btn" onclick="runBootstrap()" style="display:none;font-size:.68rem;padding:2px 8px;border-radius:5px;border:1px solid rgba(61,126,252,.4);background:transparent;color:rgba(61,126,252,.8);cursor:pointer;white-space:nowrap">补齐历史</button>
     </div>
   </div>
   <div class="breadth-wrap">
@@ -143,25 +143,25 @@
     <div class="breadth-stats">
       <div class="bs-row">
         <span class="bs-label">上涨</span>
-        <span class="bs-val up" id="b-up">--</span>
+        <span class="bs-val up" id="b-up"><span class="skeleton" style="width:26px;height:15px"></span></span>
       </div>
       <div class="bs-row" style="margin-top:-2px">
         <span class="bs-label" style="font-size:.62rem;opacity:.7">涨停</span>
-        <span class="bs-val up" id="b-zt" style="font-size:.82rem">--</span>
+        <span class="bs-val up" id="b-zt" style="font-size:.82rem"><span class="skeleton" style="width:20px;height:12px"></span></span>
       </div>
       <div class="bs-divider"></div>
       <div class="bs-row">
         <span class="bs-label">平盘</span>
-        <span class="bs-val flat" id="b-flat">--</span>
+        <span class="bs-val flat" id="b-flat"><span class="skeleton" style="width:26px;height:15px"></span></span>
       </div>
       <div class="bs-divider"></div>
       <div class="bs-row">
         <span class="bs-label">下跌</span>
-        <span class="bs-val down" id="b-down">--</span>
+        <span class="bs-val down" id="b-down"><span class="skeleton" style="width:26px;height:15px"></span></span>
       </div>
       <div class="bs-row" style="margin-top:-2px">
         <span class="bs-label" style="font-size:.62rem;opacity:.7">跌停</span>
-        <span class="bs-val down" id="b-dt" style="font-size:.82rem">--</span>
+        <span class="bs-val down" id="b-dt" style="font-size:.82rem"><span class="skeleton" style="width:20px;height:12px"></span></span>
       </div>
       <div class="bs-divider"></div>
       <div class="bs-row">
@@ -171,7 +171,7 @@
       <div class="bs-divider"></div>
       <div class="bs-row" title="涨停数÷跌停数，反映赚钱效应；>1 偏强，<1 偏弱">
         <span class="bs-label">涨跌停比</span>
-        <span class="bs-val" id="b-ztdt" style="font-size:.82rem">--</span>
+        <span class="bs-val" id="b-ztdt" style="font-size:.82rem"><span class="skeleton" style="width:20px;height:12px"></span></span>
       </div>
     </div>
     <!-- 右：近60日历史图 -->
@@ -361,6 +361,10 @@ fetch('/api/market/breadth').then(r=>r.json()).then(d=>{
     ztdtEl.textContent = dt>0 ? (zt/dt).toFixed(1) : (zt>0 ? `${zt}:0` : '0');
     ztdtEl.className = 'bs-val ' + (ratio>=1 ? 'up' : ratio>0 ? 'down' : 'flat');
   }
+}).catch(()=>{
+  ['b-up','b-zt','b-flat','b-down','b-dt'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.textContent='加载失败';
+  });
 });
 
 /* ── ① bis 情绪历史图 ── */
@@ -368,7 +372,9 @@ const breadthHistChart=echarts.init(document.getElementById('breadth-hist-chart'
 window.addEventListener('resize',()=>breadthHistChart.resize());
 
 function renderBreadthHist(data){
+  const bootstrapBtn=document.getElementById('bootstrap-btn');
   if(!data||!data.length){
+    if(bootstrapBtn) bootstrapBtn.style.display='inline-block';
     breadthHistChart.setOption({graphic:[{type:'text',left:'center',top:'middle',
       style:{text:'暂无历史数据，点击「补齐历史」',fill:'rgba(255,255,255,.25)',fontSize:12}}]});
     return;
@@ -380,6 +386,8 @@ function renderBreadthHist(data){
   const amtArr=data.map(d=>d.amount!=null?+(d.amount/1e8).toFixed(0):null);
   const hasFullCount=data.some(d=>d.up>0);
   const hasAmount=amtArr.some(v=>v!=null);
+  // 只有在真的需要补齐历史时才显示按钮，避免常驻主视图
+  if(bootstrapBtn) bootstrapBtn.style.display=hasFullCount?'none':'inline-block';
   const noteStr=hasFullCount
     ?'涨停（橙）/ 上涨（红）/ 下跌（绿）'+(hasAmount?' / 成交额（蓝）':'')
     :'涨停数（近60日，点击补齐历史）';
@@ -427,7 +435,7 @@ function runBootstrap(){
   const btn=document.getElementById('bootstrap-btn');
   btn.textContent='补齐中…';btn.disabled=true;
   btn.style.color='rgba(245,166,35,.8)';btn.style.borderColor='rgba(245,166,35,.4)';
-  fetch('/api/admin/bootstrap_history?days=62').then(r=>r.json()).then(()=>{
+  fetch('/api/admin/bootstrap_history?days=62',{method:'POST'}).then(r=>r.json()).then(()=>{
     btn.textContent='✓ 已补齐';btn.style.color='rgba(86,201,142,.8)';btn.style.borderColor='rgba(86,201,142,.4)';
     btn.disabled=false;loadBreadthHist();
   }).catch(()=>{
@@ -437,32 +445,43 @@ function runBootstrap(){
 }
 
 /* ── ① 指数 ── */
-function loadIndices(){
-  fetch('/api/indices').then(r=>r.json()).then(data=>{
-    document.getElementById('index-cards').innerHTML = data.map(d=>{
-      const cls=pctClass(d.change_pct);
-      const chgAbs=d.price!=null&&d.prev_close?(d.price-d.prev_close).toFixed(2):'--';
-      const amtStr=d.amount>0?fmtAmt(d.amount):'';
-      return `<div class="col-6 col-md-4 col-xl-2">
-        <div class="idx-card ${cls}">
-          <div class="idx-name">${d.name}</div>
-          <div class="idx-price ${cls} num">${d.price!=null?d.price.toFixed(2):'--'}</div>
-          <div class="d-flex gap-2 mt-1">
-            <span class="idx-chg ${cls} num">${fmtPct(d.change_pct)}</span>
-            <span class="idx-chg ${cls} num" style="opacity:.7">${chgAbs}</span>
-          </div>
-          ${amtStr?`<div class="num" style="font-size:.67rem;color:var(--text3);margin-top:3px">${amtStr}</div>`:''}
+function renderIndices(data){
+  document.getElementById('index-cards').innerHTML = data.map(d=>{
+    const cls=pctClass(d.change_pct);
+    const chgAbs=d.price!=null&&d.prev_close?(d.price-d.prev_close).toFixed(2):'--';
+    const amtStr=d.amount>0?fmtAmt(d.amount):'';
+    return `<div class="col-6 col-md-4 col-xl-2">
+      <div class="idx-card ${cls}">
+        <div class="idx-name">${d.name}</div>
+        <div class="idx-price ${cls} num">${d.price!=null?d.price.toFixed(2):'--'}</div>
+        <div class="d-flex gap-2 mt-1">
+          <span class="idx-chg ${cls} num">${fmtPct(d.change_pct)}</span>
+          <span class="idx-chg ${cls} num" style="opacity:.7">${chgAbs}</span>
         </div>
-      </div>`;
-    }).join('');
-    // 两市合计成交额：取名称含「上证」和「深证」的指数求和
-    const total = data
-      .filter(d => /上证|深证/.test(d.name) && d.amount > 0)
-      .reduce((s, d) => s + d.amount, 0);
-    if (total > 0) document.getElementById('b-amount').textContent = fmtAmt(total);
+        ${amtStr?`<div class="num" style="font-size:.67rem;color:var(--text3);margin-top:3px">${amtStr}</div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+  // 两市合计成交额：取名称含「上证」和「深证」的指数求和
+  const total = data
+    .filter(d => /上证|深证/.test(d.name) && d.amount > 0)
+    .reduce((s, d) => s + d.amount, 0);
+  if (total > 0) document.getElementById('b-amount').textContent = fmtAmt(total);
+}
+
+function loadIndices(){
+  fetch('/api/indices').then(r=>r.json()).then(renderIndices).catch(()=>{
+    document.getElementById('index-cards').innerHTML =
+      '<div class="col-12 text-center text-muted py-3">加载失败</div>';
   });
 }
-loadIndices();
+
+// 服务端已直出首屏指数数据时跳过首次请求，避免闪烁；仍保留定时刷新
+if (window.__INITIAL_INDICES__ && window.__INITIAL_INDICES__.length) {
+  renderIndices(window.__INITIAL_INDICES__);
+} else {
+  loadIndices();
+}
 setInterval(loadIndices, 60000);
 
 /* ── 热力图 ── */
@@ -496,6 +515,9 @@ function loadHeatmap(type){
         }))
       }]
     });
+  }).catch(()=>{
+    heatmap.setOption({graphic:[{type:'text',left:'center',top:'middle',
+      style:{text:'加载失败',fill:'rgba(255,255,255,.25)',fontSize:12}}]});
   });
 }
 function switchHeatmap(type){
@@ -517,6 +539,9 @@ fetch('/api/flow/industry').then(r=>r.json()).then(data=>{
       <td class="text-end num ${d.net>0?'up':'down'} fw-bold" style="font-size:.8rem">${fmtNet(d.net)}</td>
       <td class="text-end"><span class="chg-badge ${pctClass(d.change_pct)}">${fmtPct(d.change_pct)}</span></td>
     </tr>`).join('');
+}).catch(()=>{
+  document.querySelector('#flow-table tbody').innerHTML=
+    '<tr><td colspan="3" class="text-center text-muted py-2">加载失败</td></tr>';
 });
 
 /* ── 涨停板 + 连板梯队 ── */
@@ -562,7 +587,7 @@ function loadZT(){
     tbody.innerHTML=sorted.slice(0,30).map(d=>{
       const n=Number(d.zt_days)||1;
       const lv=n>=4?'t4':n===3?'t3':n===2?'t2':'t1';
-      const label=n>=4?`${n}板`:n===1?'首板':`${n}板`;
+      const label=n>=4?`${n}板+`:n===1?'首板':`${n}板`;
       const openCnt=d.open_count!=null?Number(d.open_count):null;
       return `<tr>
         <td class="num text-muted" style="font-size:.78rem">${d.code||'-'}</td>
@@ -575,6 +600,9 @@ function loadZT(){
         <td class="text-end num" style="font-size:.8rem">${fmtAmt(d.seal_amount)}</td>
       </tr>`;
     }).join('');
+  }).catch(()=>{
+    document.querySelector('#zt-table tbody').innerHTML=
+      '<tr><td colspan="6" class="text-center text-muted py-3">加载失败</td></tr>';
   });
 }
 loadZT();
@@ -590,11 +618,11 @@ function renderLhbRows(rows){
     const nbCls=nb>=0?'net-buy-pos':'net-buy-neg';
     const mktCap=d.free_mkt_cap!=null?(d.free_mkt_cap/1e8).toFixed(0)+'亿':'-';
     const turnover=d.turnover!=null?Number(d.turnover).toFixed(2)+'%':'-';
-    const reason=(d.reason||'').replace(/"/g,'');
+    const reason=escHtml(d.reason||'');
     const reasonHtml=reason?`<div class="lhb-reason" title="${reason}">${reason}</div>`:'';
     return `<tr>
-      <td style="font-size:.8rem;color:var(--text2)">${d.code||'-'}</td>
-      <td class="fw-semibold" style="font-size:.84rem">${d.name||'-'}${reasonHtml}</td>
+      <td style="font-size:.8rem;color:var(--text2)">${escHtml(d.code)||'-'}</td>
+      <td class="fw-semibold" style="font-size:.84rem">${escHtml(d.name)||'-'}${reasonHtml}</td>
       <td class="text-end"><span class="chg-badge ${cls}">${fmtPct(d.change_pct)}</span></td>
       <td class="text-end num ${nbCls}">${fmtM(nb)}</td>
       <td class="text-end" style="font-size:.8rem;color:var(--text2)">${turnover}</td>
@@ -606,6 +634,9 @@ function renderLhbRows(rows){
 /* 今日实时 LHB */
 fetch('/api/market/lhb').then(r=>r.json()).then(data=>{
   renderLhbRows(data.filter(d=>!d.error).slice(0,20));
+}).catch(()=>{
+  document.querySelector('#lhb-table tbody').innerHTML=
+    '<tr><td colspan="6" class="text-center text-muted py-3">加载失败</td></tr>';
 });
 
 /* LHB 历史切换 */
@@ -629,6 +660,15 @@ fetch('/api/market/lhb_history').then(r=>r.json()).then(resp=>{
   });
 }).catch(()=>{});
 
+/* 涨跌停阈值：科创/创业板 ±20%，北交所 ±30%，ST ±5%，主板 ±10%（与 market.py 口径一致） */
+function ztThreshold(code, name){
+  code=code||'';
+  if(code.startsWith('688')||code.startsWith('300')||code.startsWith('301')) return 19.9;
+  if(code.startsWith('83')||code.startsWith('87')||code.startsWith('43'))    return 29.9;
+  if((name||'').includes('ST'))                                              return 4.9;
+  return 9.9;
+}
+
 /* ── 连板次日追踪 ── */
 fetch('/api/market/zt_history').then(r=>r.json()).then(resp=>{
   const yesterday=resp.date;
@@ -649,18 +689,19 @@ fetch('/api/market/zt_history').then(r=>r.json()).then(resp=>{
     tbody.innerHTML=ytRows.sort((a,b)=>(b.zt_days||0)-(a.zt_days||0)).map(d=>{
       const q=qMap[d.code];
       const chgPct=q?.change_pct;
+      const zt=ztThreshold(d.code, d.name);
       let badgeHtml='<span class="track-badge track-flat">未知</span>';
       if(chgPct!=null){
-        if(chgPct>=9.9)      badgeHtml=`<span class="track-badge track-zt">继续涨停</span>`;
+        if(chgPct>=zt)       badgeHtml=`<span class="track-badge track-zt">继续涨停</span>`;
         else if(chgPct>=3)   badgeHtml=`<span class="track-badge track-up">高开高走</span>`;
         else if(chgPct>=0)   badgeHtml=`<span class="track-badge track-flat">平开震荡</span>`;
-        else if(chgPct>=-9.9)badgeHtml=`<span class="track-badge track-down">跌幅回调</span>`;
+        else if(chgPct>=-zt) badgeHtml=`<span class="track-badge track-down">跌幅回调</span>`;
         else                 badgeHtml=`<span class="track-badge track-dt">触及跌停</span>`;
       }
       const cls=chgPct!=null?pctClass(chgPct):'flat';
       const n=d.zt_days||1;
       const lv=n>=4?'t4':n===3?'t3':n===2?'t2':'t1';
-      const label=n>=4?`${n}板+`:`${n}板`;
+      const label=n>=4?`${n}板+`:n===1?'首板':`${n}板`;
       return `<tr>
         <td class="num text-muted" style="font-size:.78rem">${d.code||'-'}</td>
         <td class="fw-bold" style="font-size:.85rem">${d.name||'-'}</td>
@@ -671,7 +712,7 @@ fetch('/api/market/zt_history').then(r=>r.json()).then(resp=>{
       </tr>`;
     }).join('');
     // 连板晋级率 = 今日继续涨停数 ÷ 昨日连板数（赚钱效应/接力强度）
-    const promoted=ytRows.filter(d=>{const q=qMap[d.code];return q&&q.change_pct!=null&&q.change_pct>=9.9;}).length;
+    const promoted=ytRows.filter(d=>{const q=qMap[d.code];return q&&q.change_pct!=null&&q.change_pct>=ztThreshold(d.code,d.name);}).length;
     const rate=ytRows.length?Math.round(100*promoted/ytRows.length):0;
     const rateCls=rate>=50?'up':rate>0?'flat':'down';
     document.getElementById('track-count').innerHTML=

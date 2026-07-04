@@ -1,3 +1,5 @@
+import json
+
 from fastapi import FastAPI, Request
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -5,8 +7,8 @@ from contextlib import asynccontextmanager
 
 from data.cache import init_db
 from data.scheduler import start_scheduler
-from api.routes_overview import router as overview_router
-from api.routes_boards import router as boards_router
+from api.routes_overview import router as overview_router, api_indices
+from api.routes_boards import router as boards_router, api_board_list
 from api.routes_stocks import router as stocks_router
 from api.routes_valuation import router as valuation_router
 from api.routes_macro import router as macro_router
@@ -34,14 +36,31 @@ app.include_router(news_router)
 app.include_router(leaders_router)
 
 
+def _is_error_payload(data) -> bool:
+    return isinstance(data, list) and bool(data) and isinstance(data[0], dict) and "error" in data[0]
+
+
 @app.get("/")
 def page_overview(request: Request):
-    return templates.TemplateResponse(request=request, name="overview.html")
+    # 指数是稳定 <1s 的快接口，服务端直出到首屏，避免"加载中"闪烁；
+    # 其余情绪/资金流/涨停等接口耗时不稳定，仍走客户端骨架屏 + 异步请求
+    indices = api_indices()
+    initial_indices = [] if _is_error_payload(indices) else indices
+    return templates.TemplateResponse(
+        request=request, name="overview.html",
+        context={"initial_indices": initial_indices},
+    )
 
 
 @app.get("/boards")
 def page_boards(request: Request):
-    return templates.TemplateResponse(request=request, name="boards.html")
+    # 板块列表优先读 SQLite 当日快照，稳定 <1s，服务端直出默认的概念板块视图
+    boards = api_board_list(board_type="concept", sort="change_pct", order="desc")
+    initial_boards = [] if _is_error_payload(boards) else boards
+    return templates.TemplateResponse(
+        request=request, name="boards.html",
+        context={"initial_boards": initial_boards},
+    )
 
 
 @app.get("/boards/{board_type}/{board_name}")

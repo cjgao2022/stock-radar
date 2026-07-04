@@ -9,7 +9,6 @@ import math
 import re
 import akshare as ak
 from datetime import date, datetime, timedelta
-from data.fetchers import _AK_LOCK
 
 # 历史走势用接口（降序，head=最新）
 _HIST_INDICATORS = {
@@ -74,8 +73,7 @@ def fetch_macro_indicators() -> dict:
     result = {}
     for key, (fn_name, col, label) in _HIST_INDICATORS.items():
         try:
-            with _AK_LOCK:
-                df = getattr(ak, fn_name)()
+            df = getattr(ak, fn_name)()
             if df is None or df.empty:
                 result[key] = {"label": label, "hist": [], "latest": None, "prev": None, "last_date": None}
                 continue
@@ -103,10 +101,10 @@ def fetch_macro_calendar() -> list[dict]:
     today = date.today()
     end   = today + timedelta(days=90)
     events = []
+    failures = []
     for key, (fn_name, label) in _CAL_INDICATORS.items():
         try:
-            with _AK_LOCK:
-                df = getattr(ak, fn_name)()
+            df = getattr(ak, fn_name)()
             if df is None or df.empty:
                 continue
             future = df[df['今值'].isna()].copy()
@@ -121,7 +119,11 @@ def fetch_macro_calendar() -> list[dict]:
                         "prev":     _safe_float(row.get('前值')),
                         "forecast": _safe_float(row.get('预测值')),
                     })
-        except Exception:
-            continue
+        except Exception as e:
+            failures.append(str(e))
+    # 全部指标都请求失败时视为瞬时故障，返回 error 而非空列表，避免被 get_cached 当作
+    # "确认无未来90天事件" 缓存 24 小时；只要有一个指标成功，空结果就是真实的
+    if failures and len(failures) == len(_CAL_INDICATORS):
+        return [{"error": failures[0]}]
     events.sort(key=lambda x: x['date'])
     return events

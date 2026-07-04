@@ -1,7 +1,6 @@
 """个股估值历史分位：PE(TTM) / PB 近1年分位（百度股市通，非 push2，代理封锁下可用）"""
 import re
 import time
-from data.fetchers import _AK_LOCK
 
 _cache: dict[str, tuple] = {}   # code -> (result, ts)
 _TTL = 21600  # 6h — 估值日频更新
@@ -49,8 +48,7 @@ def fetch_stock_valuation(code: str) -> dict:
         import pandas as pd
 
         def _series(indicator: str) -> "pd.Series":
-            with _AK_LOCK:
-                df = ak.stock_zh_valuation_baidu(symbol=pure, indicator=indicator, period="近一年")
+            df = ak.stock_zh_valuation_baidu(symbol=pure, indicator=indicator, period="近一年")
             df = df.copy()
             df["value"] = pd.to_numeric(df["value"], errors="coerce")
             df["date"] = pd.to_datetime(df["date"])

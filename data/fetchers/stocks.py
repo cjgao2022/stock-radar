@@ -6,14 +6,16 @@ import requests
 from pathlib import Path
 import yaml
 import akshare as ak
-from data.fetchers import _AK_LOCK
+from data.fetchers import parse_sina_hq_line
 
 _cfg = yaml.safe_load(Path("config.yaml").read_text(encoding="utf-8"))
 _HEADERS = {"Referer": "https://finance.sina.com.cn"}
 
 
 def _sina_prefix(code: str) -> str:
-    # 上交所：股票6/9开头，ETF 5开头；深交所：其余
+    # 上交所：股票6/9开头，ETF 5开头；北交所：83/87/43/92开头；深交所：其余
+    if code.startswith(("83", "87", "43", "92")):
+        return "bj"
     return "sh" if code.startswith(("6", "9", "5")) else "sz"
 
 
@@ -34,14 +36,11 @@ def fetch_quotes(codes: list[str]) -> list[dict]:
             continue
 
         for line in r.text.strip().split("\n"):
-            if "=" not in line or '""' in line:
+            parsed = parse_sina_hq_line(line)
+            if parsed is None:
                 continue
-            raw_code = line.split("=")[0].split("_")[-1]
+            raw_code, fields = parsed
             code = raw_code[2:]
-            val = line.split('"')[1]
-            fields = val.split(",")
-            if len(fields) < 10:
-                continue
             try:
                 prev = float(fields[2]) if fields[2] else 0
                 price = float(fields[3]) if fields[3] else 0
@@ -67,10 +66,8 @@ def fetch_quotes(codes: list[str]) -> list[dict]:
     return result
 
 
-def fetch_watchlist() -> list[dict]:
-    """拉取持仓个股行情（数据源：data/watchlist.json）"""
-    from data.watchlist_store import get_stocks
-    items = get_stocks()
+def _fetch_watchlist_quotes(items: list[dict], extra_fields: tuple[str, ...] = ()) -> list[dict]:
+    """按持仓元数据（data/watchlist.json 条目）批量拉行情并合并展示名/成本/持仓量等字段"""
     codes = [item["code"] for item in items]
     meta = {item["code"]: item for item in items}
     quotes = fetch_quotes(codes)
@@ -78,28 +75,24 @@ def fetch_watchlist() -> list[dict]:
         m = meta.get(q["code"], {})
         if m.get("name"):
             q["name"] = m["name"]
+        for f in extra_fields:
+            q[f] = m.get(f, "")
         q["added_at"] = m.get("added_at", "")
         q["cost_price"] = m.get("cost_price")
         q["shares"] = m.get("shares")
     return quotes
+
+
+def fetch_watchlist() -> list[dict]:
+    """拉取持仓个股行情（数据源：data/watchlist.json）"""
+    from data.watchlist_store import get_stocks
+    return _fetch_watchlist_quotes(get_stocks())
 
 
 def fetch_etf_watchlist() -> list[dict]:
     """拉取持仓 ETF 行情（数据源：data/watchlist.json）"""
     from data.watchlist_store import get_etfs
-    items = get_etfs()
-    codes = [item["code"] for item in items]
-    meta = {item["code"]: item for item in items}
-    quotes = fetch_quotes(codes)
-    for q in quotes:
-        m = meta.get(q["code"], {})
-        if m.get("name"):
-            q["name"] = m["name"]
-        q["etf_type"] = m.get("etf_type", "")
-        q["added_at"] = m.get("added_at", "")
-        q["cost_price"] = m.get("cost_price")
-        q["shares"] = m.get("shares")
-    return quotes
+    return _fetch_watchlist_quotes(get_etfs(), extra_fields=("etf_type",))
 
 
 def _is_etf_code(code: str) -> bool:
@@ -161,17 +154,17 @@ def _enrich_names(quotes: list[dict], suggest_type: str) -> list[dict]:
     return quotes
 
 
-def search_stock(query: str) -> list[dict]:
-    """按代码或名称查询个股（不含 ETF）。6位代码直接查，名称走 suggest type=11。"""
+def _search(query: str, suggest_type: str, want_etf: bool) -> list[dict]:
+    """按代码或名称查询个股/ETF，按 want_etf 过滤类型。6位代码直接查，名称走 suggest 接口。"""
     query = query.strip()
     if not query:
         return []
     if re.match(r"^\d{6}$", query):
-        if _is_etf_code(query):
+        if _is_etf_code(query) != want_etf:
             return []
-        return _enrich_names(fetch_quotes([query]), "11")
-    pairs = _suggest_pairs(query, "11")
-    pairs = [(c, n) for c, n in pairs if not _is_etf_code(c)]
+        return _enrich_names(fetch_quotes([query]), suggest_type)
+    pairs = _suggest_pairs(query, suggest_type)
+    pairs = [(c, n) for c, n in pairs if _is_etf_code(c) == want_etf]
     if not pairs:
         return []
     name_map = {code: name for code, name in pairs}
@@ -180,27 +173,16 @@ def search_stock(query: str) -> list[dict]:
         if q["code"] in name_map:
             q["name"] = name_map[q["code"]]
     return quotes
+
+
+def search_stock(query: str) -> list[dict]:
+    """按代码或名称查询个股（不含 ETF）。6位代码直接查，名称走 suggest type=11。"""
+    return _search(query, "11", want_etf=False)
 
 
 def search_etf(query: str) -> list[dict]:
     """按代码或名称查询 ETF（不含个股）。6位代码直接查，名称走 suggest type=22。"""
-    query = query.strip()
-    if not query:
-        return []
-    if re.match(r"^\d{6}$", query):
-        if not _is_etf_code(query):
-            return []
-        return _enrich_names(fetch_quotes([query]), "22")
-    pairs = _suggest_pairs(query, "22")
-    pairs = [(c, n) for c, n in pairs if _is_etf_code(c)]
-    if not pairs:
-        return []
-    name_map = {code: name for code, name in pairs}
-    quotes = fetch_quotes([code for code, _ in pairs])
-    for q in quotes:
-        if q["code"] in name_map:
-            q["name"] = name_map[q["code"]]
-    return quotes
+    return _search(query, "22", want_etf=True)
 
 
 def fetch_etf_meta(codes: list[str]) -> dict[str, dict]:
@@ -208,8 +190,7 @@ def fetch_etf_meta(codes: list[str]) -> dict[str, dict]:
     返回: {code: {scale: float|None, premium: float|None}}
     """
     try:
-        with _AK_LOCK:
-            df = ak.fund_etf_spot_em()
+        df = ak.fund_etf_spot_em()
     except Exception:
         return {}
     if "代码" not in df.columns:

@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% block title %}宏观数据 - 股票雷达{% endblock %}
 {% block page_title %}宏观数据{% endblock %}
-{% block page_subtitle %}CPI·PPI·PMI·M2 与市场估值温度、两融趋势{% endblock %}
 
 {% block head %}
 <style>
@@ -270,6 +269,10 @@ function renderChart(key, data) {
 
 function renderCalendar(events) {
   const tbody = document.getElementById('cal-tbody');
+  if (events && events[0] && events[0].error) {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger py-3">加载失败</td></tr>';
+    return;
+  }
   if (!events || events.length === 0) {
     tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">近 90 天内暂无计划发布数据</td></tr>';
     return;
@@ -289,7 +292,7 @@ function renderCalendar(events) {
 // ── 市场估值温度 ───────────────────────────────────────────────────
 function renderValuation(d) {
   if (!d || d.error) {
-    document.getElementById('val-hint').textContent = d?.error || '数据加载失败';
+    document.getElementById('val-hint').textContent = d?.error || '加载失败';
     return;
   }
 
@@ -493,7 +496,7 @@ Promise.all([
   renderMargin(margin);
 }).catch(() => {
   document.getElementById('cal-tbody').innerHTML =
-    '<tr><td colspan="4" class="text-center text-danger py-3">数据加载失败</td></tr>';
+    '<tr><td colspan="4" class="text-center text-danger py-3">加载失败</td></tr>';
 });
 </script>
 {% endblock %}

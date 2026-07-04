@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% block title %}行业估值 - 股票雷达{% endblock %}
 {% block page_title %}行业估值{% endblock %}
-{% block page_subtitle %}证监会行业分类 PE 加权/中位数与高低估分档{% endblock %}
 
 {% block head %}
 <style>
@@ -46,6 +45,7 @@
             <tr><td colspan="5" class="text-center text-muted py-4">加载中...</td></tr>
           </tbody>
         </table>
+        <div id="val-pagination"></div>
       </div>
       <div class="panel-body" style="padding-top:8px;border-top:1px solid var(--border)">
         <div style="font-size:.72rem;color:var(--text3);line-height:1.8">
@@ -64,6 +64,14 @@
 {% block scripts %}
 <script>
 let allRows=[], sortState={key:'pe_weighted', desc:false};
+const VAL_GROUP_PAGE_SIZE = 15; // 展开二级行业时，每页显示的一级行业分组数（含其二级子项）
+let _valPage = 1;
+
+function valGoPage(p) {
+  _valPage = p;
+  renderTable(false);
+  document.getElementById('val-table').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
 
 function peClass(v){
   if(v==null)return 'pe-null';
@@ -87,13 +95,14 @@ function sortBy(key){
   renderTable();
 }
 
-function renderTable(){
+function renderTable(resetPage = true){
+  if (resetPage) _valPage = 1;
   const showL2=document.getElementById('toggle-l2').checked;
   let rows=showL2?[...allRows]:allRows.filter(r=>r.level===1);
 
-  // Sort within each level-1 group
+  // 按一级行业分组（含其二级子项），分页以组为单位，避免把子项和父级拆到不同页
+  let groups;
   if(showL2){
-    // Group by level-1 code prefix, sort level-2 within group
     const l1=rows.filter(r=>r.level===1);
     const l2map={};
     rows.filter(r=>r.level===2).forEach(r=>{
@@ -101,18 +110,27 @@ function renderTable(){
       if(!l2map[prefix])l2map[prefix]=[];
       l2map[prefix].push(r);
     });
-    const sorted=[];
-    l1.sort((a,b)=>cmp(a,b)).forEach(r=>{
-      sorted.push(r);
-      const children=(l2map[r.code]||[]).sort((a,b)=>cmp(a,b));
-      children.forEach(c=>sorted.push(c));
-    });
-    rows=sorted;
+    l1.sort((a,b)=>cmp(a,b));
+    groups=l1.map(r=>({ l1:r, children:(l2map[r.code]||[]).sort((a,b)=>cmp(a,b)) }));
   } else {
     rows.sort((a,b)=>cmp(a,b));
+    groups=rows.map(r=>({ l1:r, children:[] }));
   }
 
-  document.getElementById('val-tbody').innerHTML=rows.map(r=>{
+  // 只有展开二级行业（数据量大）时才分页，默认视图（约31个一级行业）全部展示
+  let pageGroups=groups;
+  if(showL2){
+    const start=(_valPage-1)*VAL_GROUP_PAGE_SIZE;
+    pageGroups=groups.slice(start, start+VAL_GROUP_PAGE_SIZE);
+    renderPagination('val-pagination', _valPage, groups.length, VAL_GROUP_PAGE_SIZE, 'valGoPage');
+  } else {
+    document.getElementById('val-pagination').innerHTML='';
+  }
+
+  const flatRows=[];
+  pageGroups.forEach(g=>{ flatRows.push(g.l1); g.children.forEach(c=>flatRows.push(c)); });
+
+  document.getElementById('val-tbody').innerHTML=flatRows.map(r=>{
     const pc=peClass(r.pe_weighted);
     const pm=peClass(r.pe_median);
     return `<tr class="level-${r.level}">
@@ -132,7 +150,7 @@ function cmp(a,b){
 
 fetch('/api/valuation/industry_pe').then(r=>r.json()).then(data=>{
   if(data&&data[0]&&data[0].error){
-    document.getElementById('val-tbody').innerHTML=`<tr><td colspan="5" class="text-center text-danger py-3">数据加载失败：${data[0].error}</td></tr>`;
+    document.getElementById('val-tbody').innerHTML=`<tr><td colspan="5" class="text-center text-danger py-3">加载失败：${data[0].error}</td></tr>`;
     return;
   }
   allRows=data||[];
@@ -141,14 +159,7 @@ fetch('/api/valuation/industry_pe').then(r=>r.json()).then(data=>{
   document.getElementById('th-pe-w').classList.add('asc');
   renderTable();
 }).catch(e=>{
-  document.getElementById('val-tbody').innerHTML='<tr><td colspan="5" class="text-center text-danger py-3">请求失败</td></tr>';
-});
-
-// 激活导航
-document.addEventListener('DOMContentLoaded',()=>{
-  document.querySelectorAll('.nav-links a').forEach(a=>a.classList.remove('active'));
-  const n=document.getElementById('nav-valuation');
-  if(n)n.classList.add('active');
+  document.getElementById('val-tbody').innerHTML='<tr><td colspan="5" class="text-center text-danger py-3">加载失败</td></tr>';
 });
 </script>
 {% endblock %}

@@ -138,8 +138,8 @@ function loadKline(days, period='daily'){
       const rows = data.filter(d=>!d.error);
       if(!rows.length){
         klineChart.clear();
-        document.getElementById('kline-chart').innerHTML =
-          '<div class="kline-loading">K 线数据暂不可用</div>';
+        klineChart.setOption({graphic:[{type:'text',left:'center',top:'middle',
+          style:{text:'K 线数据暂不可用',fill:'var(--text3)',fontSize:14}}]});
         return;
       }
       const dates  = rows.map(d=>d.date);
@@ -256,6 +256,8 @@ fetch(`/api/boards?board_type=${boardType}&sort=change_pct&order=desc`)
         `<span class="fw-bold">${item.top_stock}</span>
          <span class="${tc} num ms-2" style="font-size:.85rem">${fmtPct(item.top_stock_chg)}</span>`;
     }
+  }).catch(()=>{
+    document.getElementById('sr-chg').textContent='加载失败';
   });
 
 /* ── 构成股 ── */
@@ -284,7 +286,7 @@ fetch(`/api/boards/${boardType}/${encodeURIComponent(boardName)}/constituents`)
     }).join('');
   }).catch(()=>{
     document.getElementById('cons-tbody').innerHTML =
-      '<tr><td colspan="4" class="text-center py-3" style="color:var(--text3)">数据加载失败</td></tr>';
+      '<tr><td colspan="4" class="text-center py-3" style="color:var(--text3)">加载失败</td></tr>';
   });
 </script>
 {% endblock %}

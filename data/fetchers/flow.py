@@ -30,14 +30,23 @@ def fetch_industry_flow() -> list[dict]:
         return [{"error": str(e)}]
 
 
-def fetch_stock_flow(code: str, market: str) -> list[dict]:
-    """个股资金流向（同花顺）"""
+def fetch_stock_flow(code: str, market: str) -> dict:
+    """个股资金流向（东方财富 push2his，按日主力/超大单/大单/中单/小单净流入），取最新一日"""
     try:
-        with _AK_LOCK:
-            df = ak.stock_fund_flow_individual(stock=code, market=market)
-        return df.to_dict(orient="records")
+        df = ak.stock_individual_fund_flow(stock=code, market=market)
+        if df is None or df.empty:
+            return {"error": "无数据"}
+        row = df.iloc[-1]
+        return {
+            "date": str(row.get("日期", "")),
+            "main_net": row.get("主力净流入-净额"),
+            "super_big_net": row.get("超大单净流入-净额"),
+            "big_net": row.get("大单净流入-净额"),
+            "mid_net": row.get("中单净流入-净额"),
+            "retail_net": row.get("小单净流入-净额"),
+        }
     except Exception as e:
-        return [{"error": str(e)}]
+        return {"error": str(e)}
 
 
 
@@ -95,21 +104,12 @@ def fetch_stock_flow_rank_all() -> list[dict]:
         return [{"error": str(e)}]
 
 
-def fetch_market_flow() -> list[dict]:
-    """大盘资金流向（东方财富，THS 无等价接口）"""
-    try:
-        with _AK_LOCK:
-            df = ak.stock_market_fund_flow()
-        return df.to_dict(orient="records")
-    except Exception as e:
-        return [{"error": str(e)}]
 
 
 def fetch_zt_pool(date: str) -> list[dict]:
     """涨停板数据（东方财富，THS 无等价接口）"""
     try:
-        with _AK_LOCK:
-            df = ak.stock_zt_pool_em(date=date)
+        df = ak.stock_zt_pool_em(date=date)
         rename = {
             "代码": "code",
             "名称": "name",
